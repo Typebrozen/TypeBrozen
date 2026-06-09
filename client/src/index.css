@@ -1,0 +1,167 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+  font-family: var(--font-mono);
+}
+
+/* Cursor Blink Animation */
+@keyframes blinkCursor {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+.cursor-blink {
+  position: relative;
+}
+
+.cursor-blink::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 2px;
+  width: 2px;
+  height: 70%;
+  background: currentColor;
+  animation: blinkCursor 1s step-end infinite;
+  border-radius: 1px;
+}
+
+/* ===== FROSTED GLASS THEME STYLES ===== */
+.glass-card {
+  backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
+}
+
+.glass-card-dark {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.1);
+}
+
+.glass-card-sepia {
+  background: rgba(210, 180, 140, 0.3);
+  border: 1px solid rgba(210, 180, 140, 0.4);
+  box-shadow: 0 8px 32px rgba(139, 69, 19, 0.2);
+}
+
+.glass-btn {
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.glass-btn-dark {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-btn-dark:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.glass-btn-light {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.glass-btn-light:hover {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.glass-btn-sepia {
+  background: rgba(210, 180, 140, 0.25);
+  border: 1px solid rgba(210, 180, 140, 0.35);
+}
+
+.glass-btn-sepia:hover {
+  background: rgba(210, 180, 140, 0.4);
+  border-color: rgba(210, 180, 140, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(139, 69, 19, 0.2);
+}
+
+.glass-btn-active-dark {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+.glass-btn-active-light {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+.glass-btn-active-sepia {
+  background: rgba(210, 180, 140, 0.5);
+  border: 1px solid rgba(210, 180, 140, 0.6);
+  box-shadow: 0 0 15px rgba(210, 180, 140, 0.2);
+}
+
+.glass-container {
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+}
+
+.glass-container-dark {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.glass-container-light {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.glass-container-sepia {
+  background: rgba(210, 180, 140, 0.15);
+}
+
+/* Shimmer Animation for Progress Bar */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Bounce Animation for Clock Emoji */
+@keyframes bounce-slow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 2s ease-in-out infinite;
+}
