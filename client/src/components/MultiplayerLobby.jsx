@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const PRESET_TEXTS = [
   {
@@ -19,6 +19,9 @@ const PRESET_TEXTS = [
   },
 ];
 
+const MAX_PLAYERS = 5;
+const MIN_PLAYERS = 2;
+
 export default function MultiplayerLobby({
   theme, themeStyles, myId, connected,
   createRoom, joinRoom, error, roomState,
@@ -30,78 +33,47 @@ export default function MultiplayerLobby({
   const [selectedText, setSelectedText] = useState(PRESET_TEXTS[0]);
   const [customText, setCustomText] = useState('');
   const [useCustom, setUseCustom] = useState(false);
-  const [showSharePopup, setShowSharePopup] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const emojis = ['🏎️', '🚀', '🐱', '🥷', '🦁', '🦄', '🤖', '🦊'];
-
-  const getBtn = (active) => {
-    return active
-      ? 'bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md'
-      : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300 font-bold py-3 px-6 rounded-lg transition';
-  };
 
   const handleStartRace = () => {
     const text = useCustom && customText.trim() ? customText.trim() : selectedText.text;
     startRace(text);
   };
 
-  const shareRoomLink = async () => {
-    const roomLink = `${window.location.origin}?room=${roomState.code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Join my TypeHanuman Race!',
-          text: `Join my typing race! Room code: ${roomState.code}`,
-          url: roomLink,
-        });
-      } catch (err) {
-        console.log('Share cancelled');
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(roomLink);
-        setShowSharePopup(true);
-        setTimeout(() => setShowSharePopup(false), 3000);
-      } catch (err) {
-        alert('Failed to copy link');
-      }
-    }
+  const copyCode = () => {
+    navigator.clipboard.writeText(roomState.code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // WAITING ROOM (when in a room)
+  // ── WAITING ROOM ──
   if (roomState) {
     const isHost = roomState.hostId === myId;
+    const playerCount = roomState.players?.length || 0;
+    const canStart = playerCount >= MIN_PLAYERS && playerCount <= MAX_PLAYERS;
 
     return (
-      <div className="max-w-lg mx-auto bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-xl text-zinc-100 space-y-6">
-        {showSharePopup && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50">
-            ✅ Link copied!
-          </div>
-        )}
+      <div className="max-w-lg mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100 space-y-5">
 
+        {/* Room Code */}
         <div className="text-center">
           <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Room Code</p>
           <p className="text-5xl font-black tracking-widest text-yellow-500 font-mono">{roomState.code}</p>
-          <div className="flex gap-3 justify-center mt-3">
-            <button
-              onClick={() => navigator.clipboard.writeText(roomState.code)}
-              className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg"
-            >
-              📋 Copy Code
-            </button>
-            <button
-              onClick={shareRoomLink}
-              className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg"
-            >
-              🔗 Share Link
-            </button>
-          </div>
+          <p className="text-xs text-zinc-500 mt-1">Share this code with friends!</p>
+          <button
+            onClick={copyCode}
+            className="mt-2 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition"
+          >
+            {copied ? '✅ Copied!' : '📋 Copy Code'}
+          </button>
         </div>
 
+        {/* Players */}
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-3">
-            Players ({roomState.players?.length || 0}/8)
+          <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">
+            Players ({playerCount}/{MAX_PLAYERS})
           </h3>
           <div className="space-y-2">
             {roomState.players?.map((player) => (
@@ -109,80 +81,138 @@ export default function MultiplayerLobby({
                 <span className="text-2xl">{player.emoji}</span>
                 <span className="font-bold flex-1">{player.name}</span>
                 {player.id === roomState.hostId && (
-                  <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded">HOST</span>
+                  <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded font-bold">HOST</span>
                 )}
                 {player.id === myId && (
-                  <span className="text-xs bg-blue-500 px-2 py-1 rounded">YOU</span>
+                  <span className="text-xs bg-blue-500 px-2 py-1 rounded font-bold">YOU</span>
                 )}
               </div>
             ))}
           </div>
+          {playerCount < MIN_PLAYERS && (
+            <p className="text-xs text-zinc-500 mt-2 text-center">
+              ⏳ Need {MIN_PLAYERS - playerCount} more player{MIN_PLAYERS - playerCount > 1 ? 's' : ''}...
+            </p>
+          )}
+          {playerCount >= MAX_PLAYERS && (
+            <p className="text-xs text-yellow-500 mt-2 text-center">
+              ✅ Room is full! ({MAX_PLAYERS}/{MAX_PLAYERS})
+            </p>
+          )}
         </div>
 
+        {/* Text Selection — Host only */}
         {isHost && (
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-3">📝 Choose Race Text</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">📝 Race Text</h3>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => setUseCustom(false)} className={`px-3 py-1.5 rounded-lg text-xs ${!useCustom ? 'bg-yellow-500 text-black' : 'bg-zinc-800'}`}>Preset</button>
-              <button onClick={() => setUseCustom(true)} className={`px-3 py-1.5 rounded-lg text-xs ${useCustom ? 'bg-yellow-500 text-black' : 'bg-zinc-800'}`}>Custom</button>
+              <button onClick={() => setUseCustom(false)} className={`px-3 py-1.5 rounded-lg text-xs transition ${!useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                Preset
+              </button>
+              <button onClick={() => setUseCustom(true)} className={`px-3 py-1.5 rounded-lg text-xs transition ${useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                Custom
+              </button>
             </div>
             {!useCustom ? (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
+              <div className="space-y-2 max-h-48 overflow-y-auto">
                 {PRESET_TEXTS.map(p => (
-                  <button key={p.title} onClick={() => setSelectedText(p)} className={`w-full text-left px-4 py-3 rounded-xl text-sm ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500' : 'bg-zinc-800'}`}>
-                    {p.title} <span className="text-xs opacity-60">({p.text.split(' ').length} words)</span>
+                  <button key={p.title} onClick={() => setSelectedText(p)}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                    <span className="font-medium">{p.title}</span>
+                    <span className="ml-2 text-xs opacity-60">{p.text.split(' ').length} words</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <textarea value={customText} onChange={e => setCustomText(e.target.value)} placeholder="Paste your paragraph..." className="w-full h-28 bg-zinc-950 border rounded-xl p-3 text-sm" />
+              <textarea value={customText} onChange={e => setCustomText(e.target.value)}
+                placeholder="Paste your paragraph here..."
+                className="w-full h-28 bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm resize-none outline-none text-zinc-100 placeholder-zinc-600 focus:border-yellow-500" />
             )}
           </div>
         )}
 
+        {/* Buttons */}
         <div className="space-y-3">
           {isHost ? (
-            <button onClick={handleStartRace} disabled={roomState.players?.length < 2} className={`w-full py-3 rounded-lg font-bold ${roomState.players?.length < 2 ? 'bg-zinc-700 opacity-50' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {roomState.players?.length < 2 ? `Need 2+ players (${roomState.players?.length}/2)` : '🏁 Start Race!'}
+            <button onClick={handleStartRace} disabled={!canStart}
+              className={`w-full py-3 rounded-lg font-bold transition ${!canStart ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
+              {!canStart ? `Need ${MIN_PLAYERS}+ players to start` : `🏁 Start Race! (${playerCount} players)`}
             </button>
           ) : (
-            <div className="w-full py-3 rounded-lg bg-zinc-800 text-center text-sm">⏳ Waiting for host to start...</div>
+            <div className="w-full py-3 rounded-lg bg-zinc-800 text-zinc-400 text-center text-sm">
+              ⏳ Waiting for host to start...
+            </div>
           )}
-          <button onClick={leaveRoom} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg">Leave Room</button>
+          <button onClick={leaveRoom} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg transition">
+            Leave Room
+          </button>
         </div>
       </div>
     );
   }
 
-  // LOBBY VIEW (when not in a room)
+  // ── LOBBY ──
   return (
-    <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-xl">
-      <h2 className="text-2xl font-black text-center mb-6 text-yellow-500">Multiplayer Race</h2>
-      
-      {error && <div className="bg-red-950/50 border border-red-800 text-red-400 p-3 rounded-lg text-sm text-center mb-4">{error}</div>}
-      
-      <div className="flex items-center justify-center gap-2 mb-6">
-        <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-        <span className={connected ? 'text-green-400' : 'text-red-400'}>{connected ? 'Connected' : 'Connecting...'}</span>
-      </div>
+    <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100">
+      <h2 className="text-2xl font-black text-center mb-4 text-yellow-500">🏁 Multiplayer Race</h2>
+      <p className="text-xs text-zinc-500 text-center mb-4">Min 2 — Max 5 players</p>
 
-      <input type="text" placeholder="Your Name" maxLength={15} value={playerName} onChange={e => setPlayerName(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 mb-4" />
-      
-      <div className="mb-6">
-        <label className="text-xs mb-2 block">Avatar {playerEmoji}</label>
-        <div className="grid grid-cols-4 gap-2">
-          {emojis.map(emo => (
-            <button key={emo} onClick={() => setPlayerEmoji(emo)} className={`text-2xl p-2 rounded-xl ${playerEmoji === emo ? 'bg-yellow-500/20 border-2 border-yellow-500' : 'bg-zinc-800'}`}>{emo}</button>
-          ))}
+      {error && (
+        <div className="bg-red-950/50 border border-red-800 text-red-400 p-3 rounded-lg text-sm text-center mb-4">
+          {error}
         </div>
+      )}
+
+      <div className="flex items-center justify-center gap-2 mb-5 text-xs">
+        <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span className={connected ? 'text-green-400' : 'text-red-400'}>
+          {connected ? 'Connected' : 'Connecting...'}
+        </span>
       </div>
 
-      <button onClick={() => createRoom(playerName, playerEmoji)} disabled={!playerName.trim()} className={`w-full py-3 rounded-lg font-bold mb-4 ${!playerName.trim() ? 'bg-zinc-700 opacity-50' : 'bg-yellow-500 text-black'}`}>🏠 Create Room</button>
-      
-      <div className="text-center text-zinc-600 my-2">OR</div>
-      
-      <input type="text" placeholder="Room Code" maxLength={8} value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-center font-mono mb-3" />
-      <button onClick={() => joinRoom(roomCode, playerName, playerEmoji)} disabled={!playerName.trim() || !roomCode.trim()} className={`w-full py-3 rounded-lg font-bold ${!playerName.trim() || !roomCode.trim() ? 'bg-zinc-700 opacity-50' : 'bg-yellow-500 text-black'}`}>🔗 Join Room</button>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Your Name</label>
+          <input type="text" placeholder="Enter nickname..." maxLength={15} value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-yellow-500 transition" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Avatar {playerEmoji}</label>
+          <div className="grid grid-cols-4 gap-2">
+            {emojis.map(emo => (
+              <button key={emo} onClick={() => setPlayerEmoji(emo)}
+                className={`text-2xl p-2 rounded-xl transition ${playerEmoji === emo ? 'bg-yellow-500/20 border-2 border-yellow-500 scale-105' : 'bg-zinc-950 border border-zinc-800 opacity-60 hover:opacity-100'}`}>
+                {emo}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <hr className="border-zinc-800" />
+
+        <button onClick={() => createRoom(playerName, playerEmoji)} disabled={!playerName.trim()}
+          className={`w-full py-3 rounded-lg font-bold transition ${!playerName.trim() ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-yellow-500 hover:bg-yellow-400 text-black'}`}>
+          🏠 Create Room
+        </button>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-zinc-800" />
+          <span className="text-xs text-zinc-600 font-bold uppercase">OR</span>
+          <div className="flex-1 h-px bg-zinc-800" />
+        </div>
+
+        <input type="text" placeholder="Room Code (e.g. ABC123)" maxLength={8} value={roomCode}
+          onChange={e => setRoomCode(e.target.value.toUpperCase())}
+          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-center font-mono font-bold tracking-widest text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-yellow-500 transition" />
+
+        <button onClick={() => joinRoom(roomCode, playerName, playerEmoji)}
+          disabled={!playerName.trim() || !roomCode.trim()}
+          className={`w-full py-3 rounded-lg font-bold transition ${!playerName.trim() || !roomCode.trim() ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-yellow-500 hover:bg-yellow-400 text-black'}`}>
+          🔗 Join Room
+        </button>
+      </div>
     </div>
   );
 }

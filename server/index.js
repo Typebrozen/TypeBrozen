@@ -211,8 +211,9 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', message: 'Race already started!' }));
         return;
       }
-      if (room.players.size >= 8) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Room is full! Max 8 players.' }));
+      // ✅ UPDATED: Max 5 players instead of 8
+      if (room.players.size >= 5) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Room is full! Max 5 players.' }));
         return;
       }
 

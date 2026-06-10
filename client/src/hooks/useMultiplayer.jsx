@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import io from 'socket.io-client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+function generateId() {
+  return Math.random().toString(36).substring(2, 12);
+}
 
 export default function useMultiplayer() {
-  const [myId, setMyId] = useState(null);
   const [connected, setConnected] = useState(false);
   const [roomState, setRoomState] = useState(null);
   const [error, setError] = useState(null);
@@ -10,141 +12,149 @@ export default function useMultiplayer() {
   const [raceText, setRaceText] = useState('');
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
-  
-  const socketRef = useRef(null);
+  const [myId] = useState(() => generateId());
 
-  useEffect(() => {
-    // Connect to server - change port if your server runs on different port
-    socketRef.current = io('http://localhost:5000', {
-      transports: ['websocket'],
-    });
+  const wsRef = useRef(null);
+  const reconnectRef = useRef(null);
 
-    socketRef.current.on('connect', () => {
-      console.log('Connected to server, ID:', socketRef.current.id);
+  const send = useCallback((msg) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  const connect = useCallback(() => {
+    if (wsRef.current) wsRef.current.close();
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+    const port = import.meta.env.DEV ? '3001' : window.location.port;
+    const wsUrl = port ? `${protocol}//${host}:${port}` : `${protocol}//${host}`;
+
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
       setConnected(true);
-      setMyId(socketRef.current.id);
       setError(null);
-    });
+    };
 
-    socketRef.current.on('disconnect', () => {
-      console.log('Disconnected from server');
+    ws.onclose = () => {
       setConnected(false);
-      setError('Disconnected from server');
-    });
+      reconnectRef.current = setTimeout(connect, 3000);
+    };
 
-    socketRef.current.on('room-update', (room) => {
-      console.log('Room update received:', room);
-      setRoomState(room);
-    });
+    ws.onerror = () => {
+      setError('Connection failed. Retrying...');
+    };
 
-    socketRef.current.on('room-error', (msg) => {
-      console.log('Room error:', msg);
-      setError(msg);
-      setTimeout(() => setError(null), 3000);
-    });
+    ws.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
 
-    socketRef.current.on('race-countdown', (count) => {
-      console.log('Countdown:', count);
-      setCountdown(count);
-      if (count === 0) {
-        setRaceStarted(true);
-        setCountdown(null);
-      }
-    });
-
-    socketRef.current.on('race-start', (text) => {
-      console.log('Race starting with text length:', text?.length);
-      setRaceText(text);
-      setRaceStarted(true);
-    });
-
-    socketRef.current.on('race-finished', () => {
-      console.log('Race finished');
-      setRaceFinished(true);
-    });
-
-    socketRef.current.on('race-reset', () => {
-      console.log('Race reset');
-      setRaceStarted(false);
-      setRaceFinished(false);
-      setCountdown(null);
-      setRaceText('');
-    });
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      switch (msg.type) {
+        case 'room_created':
+        case 'room_joined':
+          setRoomState(msg.state);
+          setError(null);
+          break;
+        case 'player_joined':
+        case 'player_left':
+        case 'host_changed':
+          setRoomState(msg.state);
+          break;
+        case 'race_starting':
+          setRaceText(msg.text);
+          setCountdown(msg.countdown);
+          setRaceStarted(false);
+          break;
+        case 'countdown':
+          setCountdown(msg.count);
+          break;
+        case 'race_started':
+          setCountdown(0);
+          setRaceStarted(true);
+          break;
+        case 'player_progress':
+          setRoomState(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              players: prev.players.map(p =>
+                p.id === msg.playerId
+                  ? { ...p, progress: msg.progress, wpm: msg.wpm, accuracy: msg.accuracy }
+                  : p
+              ),
+            };
+          });
+          break;
+        case 'player_finished':
+          setRoomState(msg.state);
+          break;
+        case 'race_finished':
+          setRoomState(msg.state);
+          setRaceFinished(true);
+          break;
+        case 'error':
+          setError(msg.message);
+          setTimeout(() => setError(null), 3000);
+          break;
+        default:
+          break;
       }
     };
   }, []);
 
+  useEffect(() => {
+    connect();
+    return () => {
+      clearTimeout(reconnectRef.current);
+      wsRef.current?.close();
+    };
+  }, [connect]);
+
   const createRoom = useCallback((playerName, playerEmoji) => {
-    if (!playerName?.trim()) {
-      setError('Please enter your name');
-      return;
-    }
-    console.log('Creating room for:', playerName, playerEmoji);
-    socketRef.current?.emit('create-room', { playerName, playerEmoji });
-  }, []);
+    if (!playerName?.trim()) { setError('Please enter your name'); return; }
+    send({ type: 'create_room', playerId: myId, playerName: playerName.trim(), playerEmoji });
+  }, [send, myId]);
 
   const joinRoom = useCallback((roomCode, playerName, playerEmoji) => {
-    if (!roomCode?.trim() || !playerName?.trim()) {
-      setError('Room code and name are required');
-      return;
-    }
-    console.log('Joining room:', roomCode, playerName, playerEmoji);
-    socketRef.current?.emit('join-room', { 
-      roomCode: roomCode.toUpperCase().trim(), 
-      playerName: playerName.trim(), 
-      playerEmoji 
-    });
-  }, []);
+    if (!roomCode?.trim() || !playerName?.trim()) { setError('Room code and name are required'); return; }
+    send({ type: 'join_room', playerId: myId, playerName: playerName.trim(), playerEmoji, roomCode: roomCode.toUpperCase() });
+  }, [send, myId]);
 
   const startRace = useCallback((text) => {
-    console.log('Starting race with text');
-    socketRef.current?.emit('start-race', { text });
-  }, []);
+    send({ type: 'start_race', text });
+  }, [send]);
 
   const sendProgress = useCallback((progress, wpm, accuracy) => {
-    socketRef.current?.emit('race-progress', { progress, wpm, accuracy });
-  }, []);
+    send({ type: 'progress_update', progress, wpm, accuracy });
+  }, [send]);
 
-  const sendFinished = useCallback((finalWpm, finalAccuracy, timeTaken) => {
-    socketRef.current?.emit('race-finished', { finalWpm, finalAccuracy, timeTaken });
-  }, []);
+  const sendFinished = useCallback((wpm, accuracy) => {
+    send({ type: 'player_finished', wpm, accuracy });
+  }, [send]);
 
   const leaveRoom = useCallback(() => {
-    console.log('Leaving room');
-    socketRef.current?.emit('leave-room');
+    send({ type: 'leave_room' });
     setRoomState(null);
+    setRaceText('');
     setRaceStarted(false);
     setRaceFinished(false);
     setCountdown(null);
-    setRaceText('');
-  }, []);
+  }, [send]);
 
   const resetRace = useCallback(() => {
-    setCountdown(null);
-    setRaceText('');
     setRaceStarted(false);
     setRaceFinished(false);
+    setCountdown(null);
+    setRaceText('');
   }, []);
 
   return {
-    myId,
-    connected,
-    roomState,
-    error,
-    countdown,
-    raceText,
-    raceStarted,
-    raceFinished,
-    createRoom,
-    joinRoom,
-    startRace,
-    sendProgress,
-    sendFinished,
-    leaveRoom,
-    resetRace,
+    myId, connected, roomState, error,
+    countdown, raceText, raceStarted, raceFinished,
+    createRoom, joinRoom, startRace,
+    sendProgress, sendFinished, leaveRoom, resetRace,
   };
 }
