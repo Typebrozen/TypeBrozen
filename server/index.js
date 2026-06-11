@@ -90,6 +90,7 @@ function createRoom(roomCode, hostId, hostName, hostEmoji) {
     players: new Map(),
     status: 'waiting', // waiting | countdown | racing | finished
     text: null,
+    timeLimit: 120,    // Default initialization
     startTime: null,
     countdown: null,
   };
@@ -129,6 +130,7 @@ function getRoomState(room) {
     status: room.status,
     hostId: room.hostId,
     text: room.text,
+    timeLimit: room.timeLimit || 120, // Include timeLimit in shared state updates
     players: Array.from(room.players.values()),
   };
 }
@@ -258,11 +260,13 @@ wss.on('connection', (ws) => {
       // Pick race text
       const raceText = msg.text || shuffle(WORDS).slice(0, 80).join(' ');
       room.text = raceText;
+      room.timeLimit = msg.timeLimit || 120; // Added your requested timeLimit line here
       room.status = 'countdown';
 
       broadcastAll(room, {
         type: 'race_starting',
         text: raceText,
+        timeLimit: room.timeLimit, // Broadcast time limit to all peers
         countdown: 5,
       });
 

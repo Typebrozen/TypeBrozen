@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import keySoundFile from '../assets/key.mp3';
+import errorSoundFile from '../assets/error.mp3';
+import finishSoundFile from '../assets/finish.mp3';
+
+const keySound = new Audio(keySoundFile);
+const errorSound = new Audio(errorSoundFile);
+const finishSound = new Audio(finishSoundFile);
+keySound.volume = 0.08;
+errorSound.volume = 0.12;
+finishSound.volume = 0.2;
 
 export default function MultiplayerRace({
   theme, myId, roomState, raceText,
   raceStarted, raceFinished, countdown,
-  sendProgress, sendFinished, leaveRoom, resetRace,
+  sendProgress, sendFinished, leaveRoom,
+  timeLimit = 120,
 }) {
   const [input, setInput] = useState('');
   const [wordIndex, setWordIndex] = useState(0);
@@ -11,11 +22,17 @@ export default function MultiplayerRace({
   const [incorrectChars, setIncorrectChars] = useState(0);
   const [finished, setFinished] = useState(false);
   const [startTime, setStartTime] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(timeLimit);
 
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const progressIntervalRef = useRef(null);
+  const timerRef = useRef(null);
   const isCurrentWordWrong = useRef(false);
+  const correctRef = useRef(0);
+  const incorrectRef = useRef(0);
+  correctRef.current = correctChars;
+  incorrectRef.current = incorrectChars;
 
   const words = raceText.trim().split(/\s+/).filter(Boolean);
   const totalWords = words.length;
@@ -39,18 +56,47 @@ export default function MultiplayerRace({
       if (theme === 'sepia') return 'bg-[#5a4a2e] text-white';
       return 'bg-gray-800 text-white';
     }
-    if (theme === 'dark') return 'backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10 text-white';
-    if (theme === 'sepia') return 'backdrop-blur-sm bg-white/30 border border-amber-800/20 hover:bg-white/50 text-[#5a4a2e]';
-    return 'backdrop-blur-sm bg-white/50 border border-gray-300/40 hover:bg-white/70 text-gray-800';
+    return theme === 'dark'
+      ? 'backdrop-blur-sm bg-white/5 border border-white/10 text-white'
+      : theme === 'sepia'
+      ? 'backdrop-blur-sm bg-white/30 border border-amber-800/20 text-[#5a4a2e]'
+      : 'backdrop-blur-sm bg-white/50 border border-gray-300/40 text-gray-800';
   };
 
-  // Focus input when race starts
+  // Start timer when race starts
   useEffect(() => {
-    if (raceStarted && !finished) {
-      setStartTime(Date.now());
-      inputRef.current?.focus();
+    if (!raceStarted || finished) return;
+    setStartTime(Date.now());
+    setTimeLeft(timeLimit);
+    inputRef.current?.focus();
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [raceStarted, timeLimit]);
+
+  // Auto finish when time runs out
+  useEffect(() => {
+    if (timeLeft === 0 && raceStarted && !finished) {
+      clearInterval(progressIntervalRef.current);
+      setFinished(true);
+      const elapsed = startTime ? (Date.now() - startTime) / 1000 / 60 : 0;
+      const wpm = elapsed > 0 ? Math.round((correctRef.current / 5) / elapsed) : 0;
+      const total = correctRef.current + incorrectRef.current;
+      const accuracy = total > 0 ? Math.round((correctRef.current / total) * 100) : 100;
+      finishSound.currentTime = 0;
+      finishSound.play().catch(() => {});
+      sendFinished(wpm, accuracy);
     }
-  }, [raceStarted]);
+  }, [timeLeft, raceStarted, finished, startTime, sendFinished]);
 
   // Send progress every second
   useEffect(() => {
@@ -58,14 +104,14 @@ export default function MultiplayerRace({
     progressIntervalRef.current = setInterval(() => {
       if (!startTime) return;
       const elapsed = (Date.now() - startTime) / 1000 / 60;
-      const wpm = elapsed > 0 ? Math.round((correctChars / 5) / elapsed) : 0;
-      const total = correctChars + incorrectChars;
-      const accuracy = total > 0 ? Math.round((correctChars / total) * 100) : 100;
+      const wpm = elapsed > 0 ? Math.round((correctRef.current / 5) / elapsed) : 0;
+      const total = correctRef.current + incorrectRef.current;
+      const accuracy = total > 0 ? Math.round((correctRef.current / total) * 100) : 100;
       const progress = Math.round((wordIndex / totalWords) * 100);
       sendProgress(progress, wpm, accuracy);
     }, 1000);
     return () => clearInterval(progressIntervalRef.current);
-  }, [raceStarted, finished, wordIndex, correctChars, incorrectChars, startTime, totalWords, sendProgress]);
+  }, [raceStarted, finished, wordIndex, startTime, totalWords, sendProgress]);
 
   // Scroll to current word
   useEffect(() => {
@@ -76,19 +122,17 @@ export default function MultiplayerRace({
 
   const calcStats = useCallback(() => {
     const elapsed = startTime ? (Date.now() - startTime) / 1000 / 60 : 0;
-    const wpm = elapsed > 0 ? Math.round((correctChars / 5) / elapsed) : 0;
-    const total = correctChars + incorrectChars;
-    const accuracy = total > 0 ? Math.round((correctChars / total) * 100) : 100;
+    const wpm = elapsed > 0 ? Math.round((correctRef.current / 5) / elapsed) : 0;
+    const total = correctRef.current + incorrectRef.current;
+    const accuracy = total > 0 ? Math.round((correctRef.current / total) * 100) : 100;
     return { wpm, accuracy };
-  }, [startTime, correctChars, incorrectChars]);
+  }, [startTime]);
 
   const handleInput = useCallback((value) => {
     if (!raceStarted || finished) return;
-
     const currentWord = words[wordIndex] ?? '';
     const prev = input;
 
-    // Backspace
     if (value.length < prev.length) {
       let nc = correctChars, ni = incorrectChars;
       for (let i = prev.length - 1; i >= value.length; i--) {
@@ -106,33 +150,43 @@ export default function MultiplayerRace({
     const newChar = value[value.length - 1];
     const charIndex = value.length - 1;
 
-    // Space — next word
     if (newChar === ' ' && value.endsWith(' ')) {
+      if (isCurrentWordWrong.current) {
+        errorSound.currentTime = 0;
+        errorSound.play().catch(() => {});
+      }
       const nextIndex = wordIndex + 1;
       setWordIndex(nextIndex);
       setInput('');
       isCurrentWordWrong.current = false;
 
       if (nextIndex >= totalWords) {
-        // Finished!
         clearInterval(progressIntervalRef.current);
+        clearInterval(timerRef.current);
         setFinished(true);
+        finishSound.currentTime = 0;
+        finishSound.play().catch(() => {});
         const { wpm, accuracy } = calcStats();
         sendFinished(wpm, accuracy);
       }
       return;
     }
 
-    // Character
     if (charIndex < currentWord.length) {
       if (newChar === currentWord[charIndex]) {
+        keySound.currentTime = 0;
+        keySound.play().catch(() => {});
         setCorrectChars(c => c + 1);
       } else {
         isCurrentWordWrong.current = true;
+        errorSound.currentTime = 0;
+        errorSound.play().catch(() => {});
         setIncorrectChars(c => c + 1);
       }
     } else {
       isCurrentWordWrong.current = true;
+      errorSound.currentTime = 0;
+      errorSound.play().catch(() => {});
       setIncorrectChars(c => c + 1);
     }
 
@@ -143,9 +197,7 @@ export default function MultiplayerRace({
     if (wIndex > wordIndex) return 'pending';
     if (wIndex < wordIndex) return 'correct';
     const typed = input;
-    if (charIndex < typed.length) {
-      return typed[charIndex] === words[wIndex][charIndex] ? 'correct' : 'incorrect';
-    }
+    if (charIndex < typed.length) return typed[charIndex] === words[wIndex][charIndex] ? 'correct' : 'incorrect';
     if (charIndex === typed.length) return 'current';
     return 'pending';
   }, [wordIndex, words, input]);
@@ -155,7 +207,10 @@ export default function MultiplayerRace({
     ? [...roomState.players].sort((a, b) => (b.progress || 0) - (a.progress || 0))
     : [];
 
-  // ── COUNTDOWN SCREEN ──
+  const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
+  const timerColor = timeLeft > 30 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400';
+
+  // COUNTDOWN
   if (!raceStarted && countdown > 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 min-h-[400px]">
@@ -166,7 +221,7 @@ export default function MultiplayerRace({
     );
   }
 
-  // ── RESULTS SCREEN ──
+  // RESULTS
   if (raceFinished && roomState) {
     const sorted = [...roomState.players].sort((a, b) => {
       if (a.finished && b.finished) return (a.finishTime || 0) - (b.finishTime || 0);
@@ -182,7 +237,6 @@ export default function MultiplayerRace({
           <h2 className={`text-3xl font-bold ${textColor}`}>Race Complete!</h2>
         </div>
 
-        {/* Winner */}
         {sorted[0] && (
           <div className={`w-full ${getGlass()} p-4 text-center`}>
             <p className="text-4xl mb-1">{sorted[0].emoji}</p>
@@ -191,7 +245,6 @@ export default function MultiplayerRace({
           </div>
         )}
 
-        {/* All results */}
         <div className={`w-full ${getGlass()} overflow-hidden`}>
           {sorted.map((player, idx) => (
             <div key={player.id} className={`flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-0 ${player.id === myId ? 'bg-white/5' : ''}`}>
@@ -204,7 +257,7 @@ export default function MultiplayerRace({
                   {player.name} {player.id === myId && <span className={`text-xs ${mutedColor}`}>(You)</span>}
                 </p>
                 <p className={`text-xs ${mutedColor}`}>
-                  {player.finished ? `${player.wpm} WPM • ${player.accuracy}% acc` : `${Math.round(player.progress || 0)}% complete`}
+                  {player.wpm > 0 ? `${player.wpm} WPM • ${player.accuracy}% acc` : `${Math.round(player.progress || 0)}% complete`}
                 </p>
               </div>
               {player.finished && <span className="text-green-400 text-sm">✓</span>}
@@ -212,45 +265,60 @@ export default function MultiplayerRace({
           ))}
         </div>
 
-        <div className="flex gap-3">
-          <button onClick={leaveRoom} className={`px-6 py-3 rounded-xl text-sm font-bold transition-all hover:scale-105 ${getBtn(true)}`}>
-            Back to Lobby
-          </button>
-        </div>
+        <button onClick={leaveRoom} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all hover:scale-105 ${getBtn(true)}`}>
+          Back to Lobby
+        </button>
       </div>
     );
   }
 
-  // ── RACING SCREEN ──
+  // RACING
   return (
     <div className="flex flex-col max-w-4xl mx-auto w-full gap-4">
 
+      {/* Timer + Stats */}
+      <div className="flex justify-between items-center px-2">
+        <div className={`text-4xl font-bold font-mono tabular-nums ${timerColor}`}>
+          {formattedTime}
+        </div>
+        <div className="flex gap-6">
+          <div className="text-center">
+            <p className={`text-2xl font-bold ${textColor}`}>{myPlayer?.wpm || 0}</p>
+            <p className={`text-xs uppercase ${mutedColor}`}>WPM</p>
+          </div>
+          <div className="text-center">
+            <p className={`text-2xl font-bold ${textColor}`}>{myPlayer?.accuracy || 100}%</p>
+            <p className={`text-xs uppercase ${mutedColor}`}>ACC</p>
+          </div>
+          <div className="text-center">
+            <p className={`text-2xl font-bold ${textColor}`}>{Math.round(myPlayer?.progress || 0)}%</p>
+            <p className={`text-xs uppercase ${mutedColor}`}>Done</p>
+          </div>
+        </div>
+      </div>
+
       {/* Live Leaderboard */}
       <div className={`${getGlass()} p-4`}>
-        <p className={`text-xs uppercase tracking-wider mb-3 ${mutedColor}`}>Live Race</p>
+        <p className={`text-xs uppercase tracking-wider mb-3 ${mutedColor}`}>🏁 Live Race</p>
         <div className="flex flex-col gap-2">
           {sortedPlayers.map((player, idx) => (
             <div key={player.id} className="flex items-center gap-3">
               <span className={`text-xs w-4 ${mutedColor}`}>{idx + 1}</span>
               <span className="text-xl">{player.emoji}</span>
-              <span className={`text-sm w-24 truncate ${player.id === myId ? textColor : mutedColor}`}>
+              <span className={`text-sm w-20 truncate ${player.id === myId ? textColor : mutedColor}`}>
                 {player.name}
               </span>
               <div className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    player.id === myId
-                      ? theme === 'dark' ? 'bg-yellow-400' : 'bg-blue-500'
-                      : 'bg-white/30'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-500 ${player.id === myId ? (theme === 'dark' ? 'bg-yellow-400' : 'bg-blue-500') : 'bg-white/30'}`}
                   style={{ width: `${player.progress || 0}%` }}
                 />
               </div>
               <span className={`text-xs w-10 text-right ${mutedColor}`}>
                 {player.finished ? '✓' : `${Math.round(player.progress || 0)}%`}
               </span>
-              <span className={`text-xs w-16 text-right font-mono ${mutedColor}`}>
-                {player.wpm > 0 ? `${player.wpm} wpm` : ''}
+              <span className={`text-xs w-14 text-right font-mono ${mutedColor}`}>
+                {player.wpm > 0 ? `${player.wpm}wpm` : ''}
               </span>
             </div>
           ))}
@@ -260,12 +328,10 @@ export default function MultiplayerRace({
       {/* Typing Area */}
       {!finished && (
         <div className="relative">
-          <div
-            ref={containerRef}
-            className={`h-64 overflow-y-auto rounded-2xl p-6 shadow-xl cursor-text ${getGlass()}`}
-            onClick={() => inputRef.current?.focus()}
-          >
-            <div className={`text-2xl leading-loose select-none tracking-wide font-mono ${textColor}`}>
+          <div ref={containerRef}
+            className={`h-48 overflow-y-auto rounded-2xl p-4 shadow-xl cursor-text ${getGlass()}`}
+            onClick={() => inputRef.current?.focus()}>
+            <div className={`text-xl leading-loose select-none tracking-wide font-mono ${textColor}`}>
               {words.map((word, wIndex) => (
                 <span key={`${word}-${wIndex}`} className="inline-block mr-3">
                   {word.split('').map((char, charIndex) => {
@@ -278,7 +344,8 @@ export default function MultiplayerRace({
                     return (
                       <span key={charIndex} data-cursor={showCursor ? 'true' : undefined} className={`${color} relative inline-block`}>
                         {showCursor && (
-                          <span className="absolute -left-0.5 top-0 bottom-0 w-0.5" style={{ backgroundColor: cursorColor, animation: 'blinkCursor 1s step-end infinite' }} />
+                          <span className="absolute -left-0.5 top-0 bottom-0 w-0.5"
+                            style={{ backgroundColor: cursorColor, animation: 'blinkCursor 1s step-end infinite' }} />
                         )}
                         {char}
                       </span>
@@ -288,36 +355,11 @@ export default function MultiplayerRace({
               ))}
             </div>
           </div>
-
-          <input
-            ref={inputRef}
-            value={input}
+          <input ref={inputRef} value={input}
             onChange={e => handleInput(e.target.value)}
             disabled={finished || !raceStarted}
             className="absolute inset-0 opacity-0 cursor-text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-          />
-        </div>
-      )}
-
-      {/* My stats */}
-      {raceStarted && (
-        <div className="flex justify-center gap-12">
-          <div className="text-center">
-            <p className={`text-2xl font-bold ${textColor}`}>{myPlayer?.wpm || 0}</p>
-            <p className={`text-xs uppercase ${mutedColor}`}>WPM</p>
-          </div>
-          <div className="text-center">
-            <p className={`text-2xl font-bold ${textColor}`}>{myPlayer?.accuracy || 100}%</p>
-            <p className={`text-xs uppercase ${mutedColor}`}>Accuracy</p>
-          </div>
-          <div className="text-center">
-            <p className={`text-2xl font-bold ${textColor}`}>{Math.round(myPlayer?.progress || 0)}%</p>
-            <p className={`text-xs uppercase ${mutedColor}`}>Progress</p>
-          </div>
+            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
         </div>
       )}
 

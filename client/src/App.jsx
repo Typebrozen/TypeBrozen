@@ -2,7 +2,7 @@ import { useState } from 'react';
 import TypingTest from './components/TypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
-import useMultiplayer from './hooks/useMultiplayer.jsx'; // ✅ Updated with .jsx extension
+import useMultiplayer from './hooks/useMultiplayer.jsx';
 
 const THEMES = {
   dark: {
@@ -37,40 +37,27 @@ export default function App() {
   const t = THEMES[theme];
 
   const {
-    myId,
-    connected,
-    roomState,
-    error,
-    countdown,
-    raceText,
-    raceStarted,
-    raceFinished,
-    createRoom,
-    joinRoom,
-    startRace,
-    sendProgress,
-    sendFinished,
-    leaveRoom,
-    resetRace,
+    myId, connected, roomState, error,
+    countdown, raceText, raceStarted, raceFinished, timeLimit,
+    createRoom, joinRoom, startRace,
+    sendProgress, sendFinished, leaveRoom, resetRace,
   } = useMultiplayer();
 
   const isInRace = raceStarted || (countdown !== null && countdown > 0) || raceFinished;
 
   return (
     <div className={`min-h-screen font-mono flex flex-col ${t.bg} ${t.text}`}>
-      <header className="px-6 py-6 flex items-center justify-between">
+
+      <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className={`text-2xl font-semibold tracking-tight ${t.header}`}>
+          <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
             🚩 TypeHanuman
           </h1>
-          <p className={`mt-0.5 text-sm ${t.sub}`}>
-            Jai Shree Ram 🙏
-          </p>
+          <p className={`text-xs ${t.sub}`}>Jai Shree Ram 🙏</p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {/* Page Switcher */}
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1">
             <button
               onClick={() => setPage('typing')}
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'typing' ? t.activebtn : t.btn}`}
@@ -82,14 +69,10 @@ export default function App() {
               className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'multiplayer' ? t.activebtn : t.btn}`}
             >
               🏁 Race
-              {connected && roomState && (
-                <span className="ml-1 text-green-400">●</span>
-              )}
             </button>
           </div>
 
-          {/* Theme Switcher */}
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             {Object.keys(THEMES).map((th) => (
               <button
                 key={th}
@@ -103,39 +86,28 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col px-6 pb-8">
+      <main className="flex-1 flex flex-col px-4 pb-6">
         {page === 'typing' && (
           <TypingTest theme={theme} themeStyles={t} />
         )}
 
         {page === 'multiplayer' && !isInRace && (
           <MultiplayerLobby
-            theme={theme}
-            themeStyles={t}
-            myId={myId}
-            connected={connected}
-            roomState={roomState}
-            error={error}
-            createRoom={createRoom}
-            joinRoom={joinRoom}
-            startRace={startRace}
-            leaveRoom={leaveRoom}
+            theme={theme} themeStyles={t} myId={myId}
+            connected={connected} roomState={roomState} error={error}
+            createRoom={createRoom} joinRoom={joinRoom}
+            startRace={startRace} leaveRoom={leaveRoom}
           />
         )}
 
         {page === 'multiplayer' && isInRace && (
           <MultiplayerRace
-            theme={theme}
-            myId={myId}
-            roomState={roomState}
-            raceText={raceText}
-            raceStarted={raceStarted}
-            raceFinished={raceFinished}
-            countdown={countdown}
-            sendProgress={sendProgress}
-            sendFinished={sendFinished}
-            leaveRoom={leaveRoom}
-            resetRace={resetRace}
+            theme={theme} myId={myId} roomState={roomState}
+            raceText={raceText} raceStarted={raceStarted}
+            raceFinished={raceFinished} countdown={countdown}
+            sendProgress={sendProgress} sendFinished={sendFinished}
+            leaveRoom={leaveRoom} resetRace={resetRace}
+            timeLimit={timeLimit}
           />
         )}
       </main>

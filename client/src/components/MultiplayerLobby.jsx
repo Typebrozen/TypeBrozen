@@ -21,6 +21,7 @@ const PRESET_TEXTS = [
 
 const MAX_PLAYERS = 5;
 const MIN_PLAYERS = 2;
+const TIME_OPTIONS = [1, 2, 3, 5, 10];
 
 export default function MultiplayerLobby({
   theme, themeStyles, myId, connected,
@@ -34,12 +35,13 @@ export default function MultiplayerLobby({
   const [customText, setCustomText] = useState('');
   const [useCustom, setUseCustom] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [timeLimit, setTimeLimit] = useState(2);
 
   const emojis = ['🏎️', '🚀', '🐱', '🥷', '🦁', '🦄', '🤖', '🦊'];
 
   const handleStartRace = () => {
     const text = useCustom && customText.trim() ? customText.trim() : selectedText.text;
-    startRace(text);
+    startRace(text, timeLimit * 60);
   };
 
   const copyCode = () => {
@@ -52,7 +54,7 @@ export default function MultiplayerLobby({
   if (roomState) {
     const isHost = roomState.hostId === myId;
     const playerCount = roomState.players?.length || 0;
-    const canStart = playerCount >= MIN_PLAYERS && playerCount <= MAX_PLAYERS;
+    const canStart = playerCount >= MIN_PLAYERS;
 
     return (
       <div className="max-w-lg mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100 space-y-5">
@@ -62,22 +64,34 @@ export default function MultiplayerLobby({
           <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Room Code</p>
           <p className="text-5xl font-black tracking-widest text-yellow-500 font-mono">{roomState.code}</p>
           <p className="text-xs text-zinc-500 mt-1">Share this code with friends!</p>
-          <button
-            onClick={copyCode}
-            className="mt-2 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition"
-          >
+          <button onClick={copyCode} className="mt-2 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition">
             {copied ? '✅ Copied!' : '📋 Copy Code'}
           </button>
         </div>
 
-        {/* Players */}
+        {/* Players List — Live */}
         <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">
-            Players ({playerCount}/{MAX_PLAYERS})
-          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">
+              Players
+            </h3>
+            <span className="text-xs font-mono text-yellow-400 font-bold">
+              {playerCount}/{MAX_PLAYERS}
+            </span>
+          </div>
+
+          {/* Progress bar for players */}
+          <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-3">
+            <div
+              className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${(playerCount / MAX_PLAYERS) * 100}%` }}
+            />
+          </div>
+
           <div className="space-y-2">
-            {roomState.players?.map((player) => (
-              <div key={player.id} className="flex items-center gap-3 bg-zinc-800 p-3 rounded-lg">
+            {roomState.players?.map((player, idx) => (
+              <div key={player.id} className="flex items-center gap-3 bg-zinc-800 p-3 rounded-lg animate-pulse-once">
+                <span className="text-xs text-zinc-500 w-4">{idx + 1}</span>
                 <span className="text-2xl">{player.emoji}</span>
                 <span className="font-bold flex-1">{player.name}</span>
                 {player.id === roomState.hostId && (
@@ -88,55 +102,78 @@ export default function MultiplayerLobby({
                 )}
               </div>
             ))}
+
+            {/* Empty slots */}
+            {Array.from({ length: MAX_PLAYERS - playerCount }).map((_, i) => (
+              <div key={`empty-${i}`} className="flex items-center gap-3 bg-zinc-800/40 p-3 rounded-lg border border-dashed border-zinc-700">
+                <span className="text-xs text-zinc-600 w-4">{playerCount + i + 1}</span>
+                <span className="text-2xl opacity-20">👤</span>
+                <span className="text-zinc-600 text-sm">Waiting for player...</span>
+              </div>
+            ))}
           </div>
+
           {playerCount < MIN_PLAYERS && (
             <p className="text-xs text-zinc-500 mt-2 text-center">
-              ⏳ Need {MIN_PLAYERS - playerCount} more player{MIN_PLAYERS - playerCount > 1 ? 's' : ''}...
-            </p>
-          )}
-          {playerCount >= MAX_PLAYERS && (
-            <p className="text-xs text-yellow-500 mt-2 text-center">
-              ✅ Room is full! ({MAX_PLAYERS}/{MAX_PLAYERS})
+              ⏳ Need {MIN_PLAYERS - playerCount} more player{MIN_PLAYERS - playerCount > 1 ? 's' : ''} to start
             </p>
           )}
         </div>
 
-        {/* Text Selection — Host only */}
+        {/* Host Controls */}
         {isHost && (
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">📝 Race Text</h3>
-            <div className="flex gap-2 mb-3">
-              <button onClick={() => setUseCustom(false)} className={`px-3 py-1.5 rounded-lg text-xs transition ${!useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
-                Preset
-              </button>
-              <button onClick={() => setUseCustom(true)} className={`px-3 py-1.5 rounded-lg text-xs transition ${useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
-                Custom
-              </button>
-            </div>
-            {!useCustom ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {PRESET_TEXTS.map(p => (
-                  <button key={p.title} onClick={() => setSelectedText(p)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
-                    <span className="font-medium">{p.title}</span>
-                    <span className="ml-2 text-xs opacity-60">{p.text.split(' ').length} words</span>
+          <>
+            {/* Time Limit */}
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">⏱️ Time Limit</h3>
+              <div className="flex gap-2 flex-wrap">
+                {TIME_OPTIONS.map(t => (
+                  <button key={t} onClick={() => setTimeLimit(t)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${timeLimit === t ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                    {t} min
                   </button>
                 ))}
               </div>
-            ) : (
-              <textarea value={customText} onChange={e => setCustomText(e.target.value)}
-                placeholder="Paste your paragraph here..."
-                className="w-full h-28 bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm resize-none outline-none text-zinc-100 placeholder-zinc-600 focus:border-yellow-500" />
-            )}
-          </div>
+            </div>
+
+            {/* Text Selection */}
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">📝 Race Text</h3>
+              <div className="flex gap-2 mb-3">
+                <button onClick={() => setUseCustom(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition ${!useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                  Preset
+                </button>
+                <button onClick={() => setUseCustom(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition ${useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                  Custom
+                </button>
+              </div>
+              {!useCustom ? (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {PRESET_TEXTS.map(p => (
+                    <button key={p.title} onClick={() => setSelectedText(p)}
+                      className={`w-full text-left px-4 py-3 rounded-xl text-sm transition ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                      <span className="font-medium">{p.title}</span>
+                      <span className="ml-2 text-xs opacity-60">{p.text.split(' ').length} words</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <textarea value={customText} onChange={e => setCustomText(e.target.value)}
+                  placeholder="Paste your paragraph here..."
+                  className="w-full h-28 bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm resize-none outline-none text-zinc-100 placeholder-zinc-600 focus:border-yellow-500" />
+              )}
+            </div>
+          </>
         )}
 
         {/* Buttons */}
         <div className="space-y-3">
           {isHost ? (
             <button onClick={handleStartRace} disabled={!canStart}
-              className={`w-full py-3 rounded-lg font-bold transition ${!canStart ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-              {!canStart ? `Need ${MIN_PLAYERS}+ players to start` : `🏁 Start Race! (${playerCount} players)`}
+              className={`w-full py-4 rounded-lg font-bold text-lg transition ${!canStart ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
+              {!canStart ? `Need ${MIN_PLAYERS - playerCount} more player${MIN_PLAYERS - playerCount > 1 ? 's' : ''}` : `🏁 Start Race! (${timeLimit} min)`}
             </button>
           ) : (
             <div className="w-full py-3 rounded-lg bg-zinc-800 text-zinc-400 text-center text-sm">
@@ -154,8 +191,8 @@ export default function MultiplayerLobby({
   // ── LOBBY ──
   return (
     <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100">
-      <h2 className="text-2xl font-black text-center mb-4 text-yellow-500">🏁 Multiplayer Race</h2>
-      <p className="text-xs text-zinc-500 text-center mb-4">Min 2 — Max 5 players</p>
+      <h2 className="text-2xl font-black text-center mb-1 text-yellow-500">🏁 Multiplayer Race</h2>
+      <p className="text-xs text-zinc-500 text-center mb-5">2 to 5 players • Real-time race</p>
 
       {error && (
         <div className="bg-red-950/50 border border-red-800 text-red-400 p-3 rounded-lg text-sm text-center mb-4">
@@ -164,9 +201,9 @@ export default function MultiplayerLobby({
       )}
 
       <div className="flex items-center justify-center gap-2 mb-5 text-xs">
-        <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+        <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
         <span className={connected ? 'text-green-400' : 'text-red-400'}>
-          {connected ? 'Connected' : 'Connecting...'}
+          {connected ? 'Connected to server' : 'Connecting...'}
         </span>
       </div>
 
@@ -175,6 +212,7 @@ export default function MultiplayerLobby({
           <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Your Name</label>
           <input type="text" placeholder="Enter nickname..." maxLength={15} value={playerName}
             onChange={e => setPlayerName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && playerName.trim() && createRoom(playerName, playerEmoji)}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-yellow-500 transition" />
         </div>
 

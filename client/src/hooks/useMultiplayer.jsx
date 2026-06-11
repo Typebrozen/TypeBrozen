@@ -12,6 +12,7 @@ export default function useMultiplayer() {
   const [raceText, setRaceText] = useState('');
   const [raceStarted, setRaceStarted] = useState(false);
   const [raceFinished, setRaceFinished] = useState(false);
+  const [timeLimit, setTimeLimit] = useState(120);
   const [myId] = useState(() => generateId());
 
   const wsRef = useRef(null);
@@ -66,6 +67,7 @@ export default function useMultiplayer() {
         case 'race_starting':
           setRaceText(msg.text);
           setCountdown(msg.countdown);
+          setTimeLimit(msg.timeLimit || 120);
           setRaceStarted(false);
           break;
         case 'countdown':
@@ -123,8 +125,8 @@ export default function useMultiplayer() {
     send({ type: 'join_room', playerId: myId, playerName: playerName.trim(), playerEmoji, roomCode: roomCode.toUpperCase() });
   }, [send, myId]);
 
-  const startRace = useCallback((text) => {
-    send({ type: 'start_race', text });
+  const startRace = useCallback((text, timeLimitSeconds = 120) => {
+    send({ type: 'start_race', text, timeLimit: timeLimitSeconds });
   }, [send]);
 
   const sendProgress = useCallback((progress, wpm, accuracy) => {
@@ -153,7 +155,7 @@ export default function useMultiplayer() {
 
   return {
     myId, connected, roomState, error,
-    countdown, raceText, raceStarted, raceFinished,
+    countdown, raceText, raceStarted, raceFinished, timeLimit,
     createRoom, joinRoom, startRace,
     sendProgress, sendFinished, leaveRoom, resetRace,
   };
