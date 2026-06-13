@@ -50,10 +50,10 @@ export default function App() {
 
       <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
+          <p className={`text-xs ${t.sub}`}>Jai Shree Ram</p>
           <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
-            🚩 TypeHanuman
+            TypeHanuman
           </h1>
-          <p className={`text-xs ${t.sub}`}>Jai Shree Ram 🙏</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
