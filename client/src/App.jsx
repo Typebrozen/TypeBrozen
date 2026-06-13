@@ -3,7 +3,6 @@ import TypingTest from './components/TypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
-import logo from './assets/logo.jpg';
 
 const THEMES = {
   dark: {
@@ -50,14 +49,11 @@ export default function App() {
     <div className={`min-h-screen font-mono flex flex-col ${t.bg} ${t.text}`}>
 
       <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <img src={logo} alt="TypeHanuman" className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-lg" />
-          <div>
-            <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
-              TypeHanuman
-            </h1>
-            <p className={`text-xs ${t.sub}`}>Jai Shree Ram 🙏</p>
-          </div>
+        <div>
+          <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
+            🚩 TypeHanuman
+          </h1>
+          <p className={`text-xs ${t.sub}`}>Jai Shree Ram 🙏</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
