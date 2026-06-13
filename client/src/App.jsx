@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TypingTest from './components/TypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
@@ -35,6 +35,17 @@ export default function App() {
   const [theme, setTheme] = useState('dark');
   const [page, setPage] = useState('typing');
   const t = THEMES[theme];
+
+  const [autoRoomCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || '';
+  });
+
+  useEffect(() => {
+    if (autoRoomCode) {
+      setPage('multiplayer');
+    }
+  }, [autoRoomCode]);
 
   const {
     myId, connected, roomState, error,
@@ -97,6 +108,7 @@ export default function App() {
             connected={connected} roomState={roomState} error={error}
             createRoom={createRoom} joinRoom={joinRoom}
             startRace={startRace} leaveRoom={leaveRoom}
+            autoRoomCode={autoRoomCode}
           />
         )}
 

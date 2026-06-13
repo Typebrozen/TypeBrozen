@@ -26,15 +26,16 @@ const TIME_OPTIONS = [1, 2, 3, 5, 10];
 export default function MultiplayerLobby({
   theme, themeStyles, myId, connected,
   createRoom, joinRoom, error, roomState,
-  startRace, leaveRoom
+  startRace, leaveRoom, autoRoomCode
 }) {
   const [playerName, setPlayerName] = useState('');
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(autoRoomCode || '');
   const [playerEmoji, setPlayerEmoji] = useState('🏎️');
   const [selectedText, setSelectedText] = useState(PRESET_TEXTS[0]);
   const [customText, setCustomText] = useState('');
   const [useCustom, setUseCustom] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [timeLimit, setTimeLimit] = useState(2);
 
   const emojis = ['🏎️', '🚀', '🐱', '🥷', '🦁', '🦄', '🤖', '🦊'];
@@ -48,6 +49,13 @@ export default function MultiplayerLobby({
     navigator.clipboard.writeText(roomState.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyLink = () => {
+    const link = `${window.location.origin}?room=${roomState.code}`;
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   // ── WAITING ROOM ──
@@ -64,9 +72,14 @@ export default function MultiplayerLobby({
           <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Room Code</p>
           <p className="text-5xl font-black tracking-widest text-yellow-500 font-mono">{roomState.code}</p>
           <p className="text-xs text-zinc-500 mt-1">Share this code with friends!</p>
-          <button onClick={copyCode} className="mt-2 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition">
-            {copied ? '✅ Copied!' : '📋 Copy Code'}
-          </button>
+          <div className="flex gap-2 justify-center mt-2">
+            <button onClick={copyCode} className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition">
+              {copied ? '✅ Copied!' : '📋 Copy Code'}
+            </button>
+            <button onClick={copyLink} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition">
+              {linkCopied ? '✅ Link Copied!' : '🔗 Share Link'}
+            </button>
+          </div>
         </div>
 
         {/* Players List — Live */}
@@ -80,7 +93,6 @@ export default function MultiplayerLobby({
             </span>
           </div>
 
-          {/* Progress bar for players */}
           <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-3">
             <div
               className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
@@ -103,7 +115,6 @@ export default function MultiplayerLobby({
               </div>
             ))}
 
-            {/* Empty slots */}
             {Array.from({ length: MAX_PLAYERS - playerCount }).map((_, i) => (
               <div key={`empty-${i}`} className="flex items-center gap-3 bg-zinc-800/40 p-3 rounded-lg border border-dashed border-zinc-700">
                 <span className="text-xs text-zinc-600 w-4">{playerCount + i + 1}</span>
@@ -123,7 +134,6 @@ export default function MultiplayerLobby({
         {/* Host Controls */}
         {isHost && (
           <>
-            {/* Time Limit */}
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">⏱️ Time Limit</h3>
               <div className="flex gap-2 flex-wrap">
@@ -136,7 +146,6 @@ export default function MultiplayerLobby({
               </div>
             </div>
 
-            {/* Text Selection */}
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">📝 Race Text</h3>
               <div className="flex gap-2 mb-3">
@@ -194,6 +203,12 @@ export default function MultiplayerLobby({
       <h2 className="text-2xl font-black text-center mb-1 text-yellow-500">🏁 Multiplayer Race</h2>
       <p className="text-xs text-zinc-500 text-center mb-5">2 to 5 players • Real-time race</p>
 
+      {autoRoomCode && (
+        <div className="bg-blue-950/50 border border-blue-800 text-blue-300 p-3 rounded-lg text-sm text-center mb-4">
+          🎉 Joining room <span className="font-mono font-bold">{autoRoomCode}</span> — enter your name below!
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-950/50 border border-red-800 text-red-400 p-3 rounded-lg text-sm text-center mb-4">
           {error}
@@ -212,7 +227,7 @@ export default function MultiplayerLobby({
           <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Your Name</label>
           <input type="text" placeholder="Enter nickname..." maxLength={15} value={playerName}
             onChange={e => setPlayerName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && playerName.trim() && createRoom(playerName, playerEmoji)}
+            onKeyDown={e => e.key === 'Enter' && playerName.trim() && (autoRoomCode ? joinRoom(roomCode, playerName, playerEmoji) : createRoom(playerName, playerEmoji))}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-yellow-500 transition" />
         </div>
 
@@ -230,16 +245,20 @@ export default function MultiplayerLobby({
 
         <hr className="border-zinc-800" />
 
-        <button onClick={() => createRoom(playerName, playerEmoji)} disabled={!playerName.trim()}
-          className={`w-full py-3 rounded-lg font-bold transition ${!playerName.trim() ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-yellow-500 hover:bg-yellow-400 text-black'}`}>
-          🏠 Create Room
-        </button>
+        {!autoRoomCode && (
+          <button onClick={() => createRoom(playerName, playerEmoji)} disabled={!playerName.trim()}
+            className={`w-full py-3 rounded-lg font-bold transition ${!playerName.trim() ? 'opacity-50 cursor-not-allowed bg-zinc-700 text-zinc-400' : 'bg-yellow-500 hover:bg-yellow-400 text-black'}`}>
+            🏠 Create Room
+          </button>
+        )}
 
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-zinc-800" />
-          <span className="text-xs text-zinc-600 font-bold uppercase">OR</span>
-          <div className="flex-1 h-px bg-zinc-800" />
-        </div>
+        {!autoRoomCode && (
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-zinc-800" />
+            <span className="text-xs text-zinc-600 font-bold uppercase">OR</span>
+            <div className="flex-1 h-px bg-zinc-800" />
+          </div>
+        )}
 
         <input type="text" placeholder="Room Code (e.g. ABC123)" maxLength={8} value={roomCode}
           onChange={e => setRoomCode(e.target.value.toUpperCase())}
