@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import rateLimit from 'express-rate-limit';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
@@ -88,9 +89,9 @@ function createRoom(roomCode, hostId, hostName, hostEmoji) {
     code: roomCode,
     hostId,
     players: new Map(),
-    status: 'waiting', // waiting | countdown | racing | finished
+    status: 'waiting',
     text: null,
-    timeLimit: 120,    // Default initialization
+    timeLimit: 120,
     startTime: null,
     countdown: null,
   };
@@ -130,20 +131,56 @@ function getRoomState(room) {
     status: room.status,
     hostId: room.hostId,
     text: room.text,
-    timeLimit: room.timeLimit || 120, // Include timeLimit in shared state updates
+    timeLimit: room.timeLimit || 120,
     players: Array.from(room.players.values()),
   };
 }
 
-// playerId -> WebSocket connection
 const playerConnections = new Map();
-// playerId -> roomCode
 const playerRooms = new Map();
+
+// ============ SECURITY HELPERS ============
+
+// Sanitize player name: strip HTML tags & limit length
+function sanitizeName(name) {
+  if (typeof name !== 'string') return 'Player';
+  const cleaned = name.replace(/<[^>]*>/g, '').trim();
+  return cleaned.slice(0, 20) || 'Player';
+}
+
+// Sanitize custom race text: strip HTML, limit length
+function sanitizeText(text) {
+  if (typeof text !== 'string') return '';
+  const cleaned = text.replace(/<[^>]*>/g, '').trim();
+  return cleaned.slice(0, 2000);
+}
+
+// Sanitize emoji: only allow short strings (emoji are typically 1-4 chars)
+function sanitizeEmoji(emoji) {
+  if (typeof emoji !== 'string') return '🏎️';
+  return emoji.slice(0, 8);
+}
 
 // ============ EXPRESS APP ============
 const app = express();
-app.use(cors());
+
+app.use(cors({
+  origin: [
+    'https://typehanuman.com',
+    'https://www.typehanuman.com',
+    'http://localhost:5173',
+  ],
+}));
 app.use(express.json());
+
+// Rate limiter for API routes
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,             // 60 requests per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -171,16 +208,34 @@ wss.on('connection', (ws) => {
   let myPlayerId = null;
   let myRoomCode = null;
 
+  // Basic per-connection message rate limiting
+  let messageCount = 0;
+  let messageWindowStart = Date.now();
+  const MAX_MESSAGES_PER_WINDOW = 120; // ~2 per second average
+  const WINDOW_MS = 10000;
+
   ws.on('message', (data) => {
+    // Rate limit check
+    const now = Date.now();
+    if (now - messageWindowStart > WINDOW_MS) {
+      messageWindowStart = now;
+      messageCount = 0;
+    }
+    messageCount++;
+    if (messageCount > MAX_MESSAGES_PER_WINDOW) {
+      return; // silently drop excess messages
+    }
+
     let msg;
     try { msg = JSON.parse(data); } catch { return; }
+    if (!msg || typeof msg.type !== 'string') return;
 
     // ── CREATE ROOM ──
     if (msg.type === 'create_room') {
       const { playerId, playerName, playerEmoji } = msg;
+      if (typeof playerId !== 'string' || !playerId) return;
       myPlayerId = playerId;
 
-      // Generate unique room code
       let code;
       do { code = Math.random().toString(36).substring(2, 8).toUpperCase(); }
       while (rooms.has(code));
@@ -189,7 +244,7 @@ wss.on('connection', (ws) => {
       playerConnections.set(playerId, ws);
       playerRooms.set(playerId, code);
 
-      const room = createRoom(code, playerId, playerName, playerEmoji);
+      const room = createRoom(code, playerId, sanitizeName(playerName), sanitizeEmoji(playerEmoji));
 
       ws.send(JSON.stringify({
         type: 'room_created',
@@ -201,6 +256,11 @@ wss.on('connection', (ws) => {
     // ── JOIN ROOM ──
     else if (msg.type === 'join_room') {
       const { playerId, playerName, playerEmoji, roomCode } = msg;
+      if (typeof playerId !== 'string' || !playerId) return;
+      if (typeof roomCode !== 'string' || !roomCode) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid room code!' }));
+        return;
+      }
       myPlayerId = playerId;
       myRoomCode = roomCode;
 
@@ -213,7 +273,6 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', message: 'Race already started!' }));
         return;
       }
-      // ✅ UPDATED: Max 5 players instead of 8
       if (room.players.size >= 5) {
         ws.send(JSON.stringify({ type: 'error', message: 'Room is full! Max 5 players.' }));
         return;
@@ -224,8 +283,8 @@ wss.on('connection', (ws) => {
 
       room.players.set(playerId, {
         id: playerId,
-        name: playerName,
-        emoji: playerEmoji,
+        name: sanitizeName(playerName),
+        emoji: sanitizeEmoji(playerEmoji),
         progress: 0,
         wpm: 0,
         accuracy: 100,
@@ -234,13 +293,11 @@ wss.on('connection', (ws) => {
         position: null,
       });
 
-      // Tell new player current state
       ws.send(JSON.stringify({
         type: 'room_joined',
         state: getRoomState(room),
       }));
 
-      // Tell everyone else
       broadcast(room, {
         type: 'player_joined',
         player: room.players.get(playerId),
@@ -257,20 +314,24 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      // Pick race text
-      const raceText = msg.text || shuffle(WORDS).slice(0, 80).join(' ');
+      const customText = sanitizeText(msg.text);
+      const raceText = customText || shuffle(WORDS).slice(0, 80).join(' ');
       room.text = raceText;
-      room.timeLimit = msg.timeLimit || 120; // Added your requested timeLimit line here
+
+      // Clamp timeLimit between 30s and 30min
+      let tl = Number(msg.timeLimit) || 120;
+      tl = Math.min(Math.max(tl, 30), 1800);
+      room.timeLimit = tl;
+
       room.status = 'countdown';
 
       broadcastAll(room, {
         type: 'race_starting',
         text: raceText,
-        timeLimit: room.timeLimit, // Broadcast time limit to all peers
+        timeLimit: room.timeLimit,
         countdown: 5,
       });
 
-      // 5 second countdown
       let count = 5;
       const interval = setInterval(() => {
         count--;
@@ -293,16 +354,20 @@ wss.on('connection', (ws) => {
       const player = room.players.get(myPlayerId);
       if (!player || player.finished) return;
 
-      player.progress = msg.progress;
-      player.wpm = msg.wpm;
-      player.accuracy = msg.accuracy;
+      const progress = Math.min(Math.max(Number(msg.progress) || 0, 0), 100);
+      const wpm = Math.min(Math.max(Number(msg.wpm) || 0, 0), 500);
+      const accuracy = Math.min(Math.max(Number(msg.accuracy) || 0, 0), 100);
+
+      player.progress = progress;
+      player.wpm = wpm;
+      player.accuracy = accuracy;
 
       broadcast(room, {
         type: 'player_progress',
         playerId: myPlayerId,
-        progress: msg.progress,
-        wpm: msg.wpm,
-        accuracy: msg.accuracy,
+        progress,
+        wpm,
+        accuracy,
       }, myPlayerId);
     }
 
@@ -318,8 +383,8 @@ wss.on('connection', (ws) => {
       player.finished = true;
       player.finishTime = Date.now() - room.startTime;
       player.position = finishedCount + 1;
-      player.wpm = msg.wpm;
-      player.accuracy = msg.accuracy;
+      player.wpm = Math.min(Math.max(Number(msg.wpm) || 0, 0), 500);
+      player.accuracy = Math.min(Math.max(Number(msg.accuracy) || 0, 0), 100);
       player.progress = 100;
 
       broadcastAll(room, {
@@ -332,7 +397,6 @@ wss.on('connection', (ws) => {
         state: getRoomState(room),
       });
 
-      // All finished?
       const allFinished = Array.from(room.players.values()).every(p => p.finished);
       if (allFinished) {
         room.status = 'finished';
@@ -362,7 +426,6 @@ wss.on('connection', (ws) => {
       if (room.players.size === 0) {
         rooms.delete(myRoomCode);
       } else if (room.hostId === myPlayerId) {
-        // Transfer host to next player
         const newHost = room.players.keys().next().value;
         room.hostId = newHost;
         broadcastAll(room, {
