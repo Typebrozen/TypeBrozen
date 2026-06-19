@@ -45,17 +45,40 @@ export default function MultiplayerLobby({
     startRace(text, timeLimit * 60);
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(roomState.code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(roomState.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for mobile/older browsers
+      const el = document.createElement('textarea');
+      el.value = roomState.code;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
-  const copyLink = () => {
+  const copyLink = async () => {
     const link = `${window.location.origin}?room=${roomState.code}`;
-    navigator.clipboard.writeText(link);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
   };
 
   // ── WAITING ROOM ──
@@ -71,8 +94,8 @@ export default function MultiplayerLobby({
         <div className="text-center">
           <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Room Code</p>
           <p className="text-5xl font-black tracking-widest text-yellow-500 font-mono">{roomState.code}</p>
-          <p className="text-xs text-zinc-500 mt-1">Share this code with friends!</p>
-          <div className="flex gap-2 justify-center mt-2">
+          <p className="text-xs text-zinc-500 mt-1">Share with friends to join!</p>
+          <div className="flex gap-2 justify-center mt-3">
             <button onClick={copyCode} className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition">
               {copied ? '✅ Copied!' : '📋 Copy Code'}
             </button>
@@ -82,27 +105,21 @@ export default function MultiplayerLobby({
           </div>
         </div>
 
-        {/* Players List — Live */}
+        {/* Players List */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">
-              Players
-            </h3>
-            <span className="text-xs font-mono text-yellow-400 font-bold">
-              {playerCount}/{MAX_PLAYERS}
-            </span>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">Players</h3>
+            <span className="text-xs font-mono text-yellow-400 font-bold">{playerCount}/{MAX_PLAYERS}</span>
           </div>
 
           <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-3">
-            <div
-              className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
-              style={{ width: `${(playerCount / MAX_PLAYERS) * 100}%` }}
-            />
+            <div className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${(playerCount / MAX_PLAYERS) * 100}%` }} />
           </div>
 
           <div className="space-y-2">
             {roomState.players?.map((player, idx) => (
-              <div key={player.id} className="flex items-center gap-3 bg-zinc-800 p-3 rounded-lg animate-pulse-once">
+              <div key={player.id} className="flex items-center gap-3 bg-zinc-800 p-3 rounded-lg">
                 <span className="text-xs text-zinc-500 w-4">{idx + 1}</span>
                 <span className="text-2xl">{player.emoji}</span>
                 <span className="font-bold flex-1">{player.name}</span>
@@ -227,7 +244,6 @@ export default function MultiplayerLobby({
           <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Your Name</label>
           <input type="text" placeholder="Enter nickname..." maxLength={15} value={playerName}
             onChange={e => setPlayerName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && playerName.trim() && (autoRoomCode ? joinRoom(roomCode, playerName, playerEmoji) : createRoom(playerName, playerEmoji))}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-yellow-500 transition" />
         </div>
 

@@ -13,7 +13,7 @@ finishSound.volume = 0.2;
 export default function MultiplayerRace({
   theme, myId, roomState, raceText,
   raceStarted, raceFinished, countdown,
-  sendProgress, sendFinished, leaveRoom,
+  sendProgress, sendFinished, leaveRoom, resetRace,
   timeLimit = 120,
 }) {
   const [input, setInput] = useState('');
@@ -210,7 +210,7 @@ export default function MultiplayerRace({
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
   const timerColor = timeLeft > 30 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400';
 
-  // COUNTDOWN
+  // ── COUNTDOWN ──
   if (!raceStarted && countdown > 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-6 min-h-[400px]">
@@ -221,7 +221,7 @@ export default function MultiplayerRace({
     );
   }
 
-  // RESULTS
+  // ── RESULTS ──
   if (raceFinished && roomState) {
     const sorted = [...roomState.players].sort((a, b) => {
       if (a.finished && b.finished) return (a.finishTime || 0) - (b.finishTime || 0);
@@ -229,6 +229,8 @@ export default function MultiplayerRace({
       if (b.finished) return 1;
       return (b.progress || 0) - (a.progress || 0);
     });
+
+    const isHost = roomState.hostId === myId;
 
     return (
       <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-6">
@@ -265,14 +267,34 @@ export default function MultiplayerRace({
           ))}
         </div>
 
-        <button onClick={leaveRoom} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all hover:scale-105 ${getBtn(true)}`}>
-          Back to Lobby
-        </button>
+        {/* Buttons */}
+        <div className="flex gap-3 w-full max-w-sm">
+          {isHost && (
+            <button
+              onClick={() => resetRace()}
+              className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:scale-105 bg-green-600 hover:bg-green-500 text-white"
+            >
+              🔄 Race Again
+            </button>
+          )}
+          <button
+            onClick={leaveRoom}
+            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:scale-105 ${getBtn(true)}`}
+          >
+            🚪 Leave
+          </button>
+        </div>
+
+        {!isHost && (
+          <p className={`text-xs ${mutedColor} text-center`}>
+            Waiting for host to start a new race...
+          </p>
+        )}
       </div>
     );
   }
 
-  // RACING
+  // ── RACING ──
   return (
     <div className="flex flex-col max-w-4xl mx-auto w-full gap-4">
 
