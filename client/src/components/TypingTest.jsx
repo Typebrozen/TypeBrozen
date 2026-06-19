@@ -170,7 +170,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
     words, loading, error, input, wordIndex,
     timeLeft, finished, wpm, accuracy,
     consistencyScore, bestStreak, personalBest,
-    isNewRecord, keyErrors,
+    isNewRecord, keyErrors, wordStatuses, // 💡 Make sure your custom hook exports wordStatuses!
     handleInput, reset, getCharStatus, loadWords,
   } = useTypingTest(mode, customWords, selectedTime);
 
@@ -397,7 +397,14 @@ export default function TypingTest({ theme, themeStyles: t }) {
             <div ref={containerRef} className={`h-80 overflow-hidden rounded-2xl p-8 shadow-xl ${colors.glassCard}`} onClick={() => inputRef.current?.focus()} role="presentation">
               <div className={`text-3xl leading-loose select-none tracking-wide font-mono ${colors.textNormal}`}>
                 {words.map((word, wIndex) => (
-                  <span key={`${word}-${wIndex}`} className="inline-block mr-3">
+                  <span 
+                    key={`${word}-${wIndex}`} 
+                    className={`inline-block mr-3 ${
+                      wIndex < wordIndex && wordStatuses?.[wIndex] === 'incorrect'
+                        ? 'underline decoration-red-500 decoration-2'
+                        : ''
+                    } ${wIndex === wordIndex ? 'relative' : ''}`}
+                  >
                     {word.split('').map((char, charIndex) => {
                       const status = getCharStatus(wIndex, charIndex);
                       let textColor = colors.untyped;

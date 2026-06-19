@@ -12,25 +12,17 @@ keySound.volume = 0.08;
 errorSound.volume = 0.12;
 finishSound.volume = 0.2;
 
-// Changed from 50 to 200
-const WORD_COUNT = 200; 
+const WORD_COUNT = 200;
 
-function calcStats(correctChars, incorrectChars, elapsedMs) {
-  const totalTyped = correctChars + incorrectChars;
-  const accuracy = totalTyped === 0 ? 100 : Math.round((correctChars / totalTyped) * 100);
-  const minutes = Math.max(elapsedMs / 60000, 1 / 60000);
-  const wpm = Math.round((correctChars / 5) / minutes);
-  return { wpm, accuracy };
-}
-
-export default function useTypingTest(mode = 'words', customWords = [], duration = 60) {
+export default function useTypingTest(mode = 'time', customWords = [], duration = 60) {
   const [words, setWords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [input, setInput] = useState('');
   const [wordIndex, setWordIndex] = useState(0);
-  const [correctChars, setCorrectChars] = useState(0);
-  const [incorrectChars, setIncorrectChars] = useState(0);
+  const [correctWords, setCorrectWords] = useState(0);
+  const [incorrectWords, setIncorrectWords] = useState(0);
+  const [wordStatuses, setWordStatuses] = useState({});
   const [timeLeft, setTimeLeft] = useState(duration);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -50,26 +42,36 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
   const startTimeRef = useRef(null);
   const intervalRef = useRef(null);
   const countdownRef = useRef(null);
-  const correctRef = useRef(0);
-  const incorrectRef = useRef(0);
+  const correctWordsRef = useRef(0);
+  const incorrectWordsRef = useRef(0);
   const durationRef = useRef(duration);
   const isCurrentWordWrong = useRef(false);
   const lastWpmUpdateRef = useRef(0);
-  const wordStartTimeRef = useRef(null);
   const isFinishingRef = useRef(false);
   const wpmHistoryRef = useRef([]);
 
-  correctRef.current = correctChars;
-  incorrectRef.current = incorrectChars;
+  correctWordsRef.current = correctWords;
+  incorrectWordsRef.current = incorrectWords;
 
   useEffect(() => {
     durationRef.current = duration;
     setTimeLeft(duration);
   }, [duration]);
 
+  // Net WPM = correctWords per minute - errorWords per minute
+  const calcNetWpm = useCallback((elapsedMs) => {
+    const minutes = Math.max(elapsedMs / 60000, 1 / 60000);
+    const grossWpm = (correctWordsRef.current + incorrectWordsRef.current) / minutes;
+    const netWpm = Math.max(0, Math.round(correctWordsRef.current / minutes - incorrectWordsRef.current / minutes));
+    const total = correctWordsRef.current + incorrectWordsRef.current;
+    const accuracy = total === 0 ? 100 : Math.round((correctWordsRef.current / total) * 100);
+    return { wpm: netWpm, grossWpm: Math.round(grossWpm), accuracy };
+  }, []);
+
   const calculateConsistencyScore = useCallback((wpmValues) => {
     if (wpmValues.length < 2) return 100;
     const avg = wpmValues.reduce((a, b) => a + b, 0) / wpmValues.length;
+    if (avg === 0) return 100;
     const variance = wpmValues.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / wpmValues.length;
     const stdDev = Math.sqrt(variance);
     const cv = stdDev / avg;
@@ -85,28 +87,20 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
   }, []);
 
-  // ✅ finishTest — no dependency on finished state
   const finishTest = useCallback(() => {
     if (isFinishingRef.current) return;
     isFinishingRef.current = true;
-
     stopAllTimers();
-
     finishSound.currentTime = 0;
     finishSound.play().catch(() => {});
-
     const elapsed = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-    const stats = calcStats(correctRef.current, incorrectRef.current, elapsed);
-
+    const stats = calcNetWpm(elapsed);
     const consistency = calculateConsistencyScore(wpmHistoryRef.current);
-
-    // Set all results at once
     setFinished(true);
     setStarted(false);
     setWpm(stats.wpm);
     setAccuracy(stats.accuracy);
     setConsistencyScore(consistency);
-
     setPersonalBest(prev => {
       if (stats.wpm > prev && stats.wpm > 0) {
         localStorage.setItem('typing_personal_best', stats.wpm.toString());
@@ -115,13 +109,10 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
       }
       return prev;
     });
-  }, [stopAllTimers, calculateConsistencyScore]);
+  }, [stopAllTimers, calcNetWpm, calculateConsistencyScore]);
 
   const loadWords = useCallback(async () => {
-    if (mode === 'custom') {
-      setLoading(false);
-      return;
-    }
+    if (mode === 'custom') { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -141,13 +132,10 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
   // TIMER
   useEffect(() => {
     if (!started || finished) return;
-
-    // Countdown every second
     countdownRef.current = setInterval(() => {
       setTimeLeft(prev => {
         const newTime = prev - 1;
         if (newTime <= 0) {
-          // ✅ Time up — finish immediately!
           setTimeout(() => finishTest(), 0);
           return 0;
         }
@@ -155,14 +143,12 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
       });
     }, 1000);
 
-    // Stats update every 100ms
     intervalRef.current = setInterval(() => {
       if (!startTimeRef.current) return;
       const elapsed = Date.now() - startTimeRef.current;
-      const stats = calcStats(correctRef.current, incorrectRef.current, elapsed);
+      const stats = calcNetWpm(elapsed);
       setWpm(stats.wpm);
       setAccuracy(stats.accuracy);
-
       const now = Math.floor(elapsed / 1000);
       if (now - lastWpmUpdateRef.current >= 2 && now > 0) {
         lastWpmUpdateRef.current = now;
@@ -173,7 +159,7 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
     }, 100);
 
     return () => stopAllTimers();
-  }, [started, finished, finishTest, calculateConsistencyScore, stopAllTimers]);
+  }, [started, finished, finishTest, calcNetWpm, calculateConsistencyScore, stopAllTimers]);
 
   const reset = useCallback(() => {
     stopAllTimers();
@@ -184,8 +170,9 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
     isCurrentWordWrong.current = false;
     setInput('');
     setWordIndex(0);
-    setCorrectChars(0);
-    setIncorrectChars(0);
+    setCorrectWords(0);
+    setIncorrectWords(0);
+    setWordStatuses({});
     setTimeLeft(durationRef.current);
     setStarted(false);
     setFinished(false);
@@ -208,101 +195,81 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
     if (!started && value.length > 0) {
       setStarted(true);
       startTimeRef.current = Date.now();
-      wordStartTimeRef.current = Date.now();
     }
 
     const currentWord = activeWords[wordIndex] ?? '';
-    const prev = input;
 
-    // Backspace
-    if (value.length < prev.length) {
-      let newCorrect = correctChars;
-      let newIncorrect = incorrectChars;
-      for (let i = prev.length - 1; i >= value.length; i--) {
-        const expected = currentWord[i];
-        if (expected === undefined) {
-          newIncorrect = Math.max(0, newIncorrect - 1);
-        } else if (prev[i] === expected) {
-          newCorrect = Math.max(0, newCorrect - 1);
-        } else {
-          newIncorrect = Math.max(0, newIncorrect - 1);
-        }
-      }
-      setCorrectChars(newCorrect);
-      setIncorrectChars(newIncorrect);
-      setInput(value);
-      return;
-    }
+    // Space — move to next word
+    if (value.endsWith(' ')) {
+      const typedWord = value.trim();
+      const isCorrect = typedWord === currentWord;
 
-    const newChar = value[value.length - 1];
-    const charIndex = value.length - 1;
+      // Update word status
+      setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
 
-    // Space — next word
-    if (newChar === ' ' && value.endsWith(' ')) {
-      if (isCurrentWordWrong.current) {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
-      }
-      const nextIndex = wordIndex + 1;
-      setWordIndex(nextIndex);
-      setInput('');
-      setCurrentStreak(0);
-      isCurrentWordWrong.current = false;
-      wordStartTimeRef.current = Date.now();
-
-      // ✅ Words/Custom complete — finish immediately!
-      if ((mode === 'words' || mode === 'custom') && nextIndex >= activeWords.length) {
-        finishTest();
-        return;
-      }
-      return;
-    }
-
-    // Character typing
-    if (charIndex < currentWord.length) {
-      if (newChar === currentWord[charIndex]) {
+      if (isCorrect) {
         keySound.currentTime = 0;
         keySound.play().catch(() => {});
-        setCorrectChars((c) => c + 1);
+        setCorrectWords(c => c + 1);
         setCurrentStreak(prev => {
           const newStreak = prev + 1;
           setBestStreak(best => Math.max(best, newStreak));
           return newStreak;
         });
       } else {
+        errorSound.currentTime = 0;
+        errorSound.play().catch(() => {});
+        setIncorrectWords(c => c + 1);
+        setCurrentStreak(0);
+        // Track which keys were wrong
+        typedWord.split('').forEach((char, i) => {
+          if (char !== currentWord[i]) trackKeyError(char);
+        });
+      }
+
+      const nextIndex = wordIndex + 1;
+      setWordIndex(nextIndex);
+      setInput('');
+      isCurrentWordWrong.current = false;
+
+      if (mode === 'custom' && nextIndex >= activeWords.length) {
+        finishTest();
+      }
+      return;
+    }
+
+    // Normal typing — sound feedback
+    if (value.length > input.length) {
+      const newChar = value[value.length - 1];
+      const charIndex = value.length - 1;
+      if (charIndex < currentWord.length && newChar === currentWord[charIndex]) {
+        keySound.currentTime = 0;
+        keySound.play().catch(() => {});
+      } else {
         isCurrentWordWrong.current = true;
         errorSound.currentTime = 0;
         errorSound.play().catch(() => {});
-        setIncorrectChars((c) => c + 1);
-        setCurrentStreak(0);
         trackKeyError(newChar);
       }
-    } else {
-      isCurrentWordWrong.current = true;
-      errorSound.currentTime = 0;
-      errorSound.play().catch(() => {});
-      setIncorrectChars((c) => c + 1);
-      setCurrentStreak(0);
-      trackKeyError(newChar);
     }
 
     setInput(value);
-  }, [finished, activeWords, wordIndex, input, correctChars, incorrectChars, started, finishTest, mode, trackKeyError]);
+  }, [finished, activeWords, wordIndex, input, started, finishTest, mode, trackKeyError]);
 
   const getCharStatus = useCallback((wIndex, charIndex) => {
     const word = activeWords[wIndex];
-    const typed = input;
+    if (!word) return 'pending';
     if (wIndex > wordIndex) return 'pending';
-    if (wIndex < wordIndex) return 'correct';
-    if (wIndex === wordIndex) {
-      if (charIndex < typed.length) {
-        return typed[charIndex] === word[charIndex] ? 'correct' : 'incorrect';
-      }
-      if (charIndex === typed.length) return 'current';
-      return 'pending';
+    if (wIndex < wordIndex) {
+      return wordStatuses[wIndex] === 'correct' ? 'correct' : 'incorrect';
     }
+    const typed = input;
+    if (charIndex < typed.length) {
+      return typed[charIndex] === word[charIndex] ? 'correct' : 'incorrect';
+    }
+    if (charIndex === typed.length) return 'current';
     return 'pending';
-  }, [wordIndex, activeWords, input]);
+  }, [wordIndex, activeWords, input, wordStatuses]);
 
   return {
     words: activeWords,
@@ -310,6 +277,7 @@ export default function useTypingTest(mode = 'words', customWords = [], duration
     error,
     input,
     wordIndex,
+    wordStatuses,
     timeLeft,
     started,
     finished,
