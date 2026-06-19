@@ -59,24 +59,30 @@ export default function useMultiplayer() {
           setRoomState(msg.state);
           setError(null);
           break;
+
         case 'player_joined':
         case 'player_left':
         case 'host_changed':
           setRoomState(msg.state);
           break;
+
         case 'race_starting':
           setRaceText(msg.text);
           setCountdown(msg.countdown);
           setTimeLimit(msg.timeLimit || 120);
           setRaceStarted(false);
+          setRaceFinished(false);
           break;
+
         case 'countdown':
           setCountdown(msg.count);
           break;
+
         case 'race_started':
           setCountdown(0);
           setRaceStarted(true);
           break;
+
         case 'player_progress':
           setRoomState(prev => {
             if (!prev) return prev;
@@ -90,17 +96,21 @@ export default function useMultiplayer() {
             };
           });
           break;
+
         case 'player_finished':
           setRoomState(msg.state);
           break;
+
         case 'race_finished':
           setRoomState(msg.state);
           setRaceFinished(true);
           break;
+
         case 'error':
           setError(msg.message);
           setTimeout(() => setError(null), 3000);
           break;
+
         default:
           break;
       }
@@ -144,6 +154,8 @@ export default function useMultiplayer() {
     setRaceStarted(false);
     setRaceFinished(false);
     setCountdown(null);
+    // Clear URL params
+    window.history.replaceState({}, '', '/');
   }, [send]);
 
   const resetRace = useCallback(() => {
