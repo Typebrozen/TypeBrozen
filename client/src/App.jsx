@@ -34,6 +34,8 @@ const THEMES = {
 export default function App() {
   const [theme, setTheme] = useState('dark');
   const [page, setPage] = useState('typing');
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
   const t = THEMES[theme];
 
   const [autoRoomCode] = useState(() => {
@@ -42,10 +44,34 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (autoRoomCode) {
-      setPage('multiplayer');
-    }
+    if (autoRoomCode) setPage('multiplayer');
   }, [autoRoomCode]);
+
+  // Capture install prompt
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    }
+  };
 
   const {
     myId, connected, roomState, error,
@@ -94,6 +120,16 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          {/* Install Button */}
+          {installPrompt && !isInstalled && (
+            <button
+              onClick={handleInstall}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 bg-yellow-500 hover:bg-yellow-400 text-black"
+            >
+              ⬇️ Install App
+            </button>
+          )}
         </div>
       </header>
 
@@ -123,6 +159,30 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Install Banner — Mobile */}
+      {installPrompt && !isInstalled && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-yellow-500 text-black flex items-center justify-between gap-3 z-50">
+          <div>
+            <p className="font-bold text-sm">Install TypeHanuman!</p>
+            <p className="text-xs opacity-70">Offline typing + faster loading</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setInstallPrompt(null)}
+              className="px-3 py-1.5 rounded-lg text-xs bg-black/20 hover:bg-black/30 transition"
+            >
+              Later
+            </button>
+            <button
+              onClick={handleInstall}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-black text-white hover:bg-black/80 transition"
+            >
+              Install ⬇️
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
