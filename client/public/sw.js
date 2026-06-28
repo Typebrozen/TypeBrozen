@@ -1,4 +1,4 @@
-const CACHE_NAME = 'typehanuman-v1';
+const CACHE_NAME = 'typehanuman-v2';
 
 // Files jo offline cache honge
 const OFFLINE_FILES = [
