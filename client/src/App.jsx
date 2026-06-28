@@ -159,30 +159,6 @@ export default function App() {
           />
         )}
       </main>
-
-      {/* Install Banner — Mobile */}
-      {installPrompt && !isInstalled && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-yellow-500 text-black flex items-center justify-between gap-3 z-50">
-          <div>
-            <p className="font-bold text-sm">Install TypeHanuman!</p>
-            <p className="text-xs opacity-70">Offline typing + faster loading</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setInstallPrompt(null)}
-              className="px-3 py-1.5 rounded-lg text-xs bg-black/20 hover:bg-black/30 transition"
-            >
-              Later
-            </button>
-            <button
-              onClick={handleInstall}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-black text-white hover:bg-black/80 transition"
-            >
-              Install ⬇️
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
