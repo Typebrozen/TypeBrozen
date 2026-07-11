@@ -89,7 +89,7 @@ export default function App() {
         <div>
           <p className={`text-xs ${t.sub}`}>Jai Shree Ram</p>
           <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
-            TypeHanuman
+            Type<span className="text-yellow-500">Hanuman</span>
           </h1>
         </div>
 
