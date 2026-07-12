@@ -18,5 +18,13 @@
     "@vitejs/plugin-react": "^4.5.0",
     "tailwindcss": "^4.1.8",
     "vite": "^6.3.5"
-  }
+  },
+  "browserslist": [
+    "last 3 Chrome versions",
+    "last 3 Firefox versions",
+    "last 3 Safari versions",
+    "last 3 Edge versions",
+    "iOS >= 12",
+    "Android >= 6"
+  ]
 }
