@@ -410,7 +410,8 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         onChange={e => handleInput(e.target.value)}
         disabled={finished}
         className="opacity-0 absolute pointer-events-none"
-        autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
+        lang="hi"
+        inputMode="none" />
 
       {/* Next key hint */}
       {activeKey && started && !finished && (
@@ -501,7 +502,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       )}
 
       <p className={`text-center text-xs ${c.muted}`}>
-        Click here or start typing — press space after each word
+        👆 Neeche virtual keyboard se type karo — ya PC mein Hindi keyboard enable karo
       </p>
       <button onClick={reset} className={`mx-auto text-sm ${c.muted}`}>Reset</button>
     </div>
