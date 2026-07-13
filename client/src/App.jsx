@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import TypingTest from './components/TypingTest';
+import HindiTypingTest from './components/HindiTypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
@@ -34,6 +35,7 @@ const THEMES = {
 export default function App() {
   const [theme, setTheme] = useState('dark');
   const [page, setPage] = useState('typing');
+  const [language, setLanguage] = useState('en');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const t = THEMES[theme];
@@ -54,12 +56,9 @@ export default function App() {
       setInstallPrompt(e);
     };
     window.addEventListener('beforeinstallprompt', handler);
-
-    // Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
     }
-
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
@@ -94,6 +93,8 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+
+          {/* Page Switcher */}
           <div className="flex gap-1">
             <button
               onClick={() => setPage('typing')}
@@ -109,6 +110,26 @@ export default function App() {
             </button>
           </div>
 
+          {/* Language Toggle — only on typing page */}
+          {page === 'typing' && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => setLanguage('en')}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'en' ? t.activebtn : t.btn}`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => setLanguage('hi')}
+                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'hi' ? t.activebtn : t.btn}`}
+                style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
+              >
+                हिं
+              </button>
+            </div>
+          )}
+
+          {/* Theme Switcher */}
           <div className="flex gap-1">
             {Object.keys(THEMES).map((th) => (
               <button
@@ -134,10 +155,17 @@ export default function App() {
       </header>
 
       <main className="flex-1 flex flex-col px-4 pb-6">
-        {page === 'typing' && (
+
+        {/* Typing Pages */}
+        {page === 'typing' && language === 'en' && (
           <TypingTest theme={theme} themeStyles={t} />
         )}
 
+        {page === 'typing' && language === 'hi' && (
+          <HindiTypingTest theme={theme} themeStyles={t} />
+        )}
+
+        {/* Multiplayer */}
         {page === 'multiplayer' && !isInRace && (
           <MultiplayerLobby
             theme={theme} themeStyles={t} myId={myId}
