@@ -5,18 +5,18 @@ const HINDI_WORDS = [
   'आम', 'घर', 'पानी', 'खाना', 'काम', 'देश', 'लोग', 'बात', 'हाथ', 'दिन',
   'रात', 'समय', 'जगह', 'साल', 'बच्चा', 'महिला', 'पुरुष', 'सरकार', 'राज्य', 'शहर',
   'गांव', 'स्कूल', 'किताब', 'पढ़ना', 'लिखना', 'खेलना', 'दौड़ना', 'खाना', 'पीना', 'सोना',
-  'उठना', 'बैठना', 'चलना', 'आना', 'जाना', 'करना', 'होना', 'देना', 'लेना', 'बोलना',
-  'सुनना', 'देखना', 'सोचना', 'समझना', 'जानना', 'मानना', 'चाहना', 'मिलना', 'रहना', 'बनना',
-  'नया', 'पुराना', 'बड़ा', 'छोटा', 'अच्छा', 'बुरा', 'सही', 'गलत', 'सुंदर', 'कठिन',
-  'आसान', 'तेज', 'धीमा', 'ऊंचा', 'नीचा', 'लंबा', 'चौड़ा', 'गहरा', 'हल्का', 'भारी',
-  'भारत', 'दिल्ली', 'मुंबई', 'जयपुर', 'लखनऊ', 'पटना', 'भोपाल', 'रायपुर', 'कोलकाता', 'चेन्नई',
-  'नदी', 'पहाड़', 'जंगल', 'समुद्र', 'आकाश', 'धरती', 'हवा', 'आग', 'मिट्टी', 'पत्थर',
-  'सूरज', 'चांद', 'तारा', 'बादल', 'बारिश', 'धूप', 'छाया', 'रोशनी', 'अंधेरा', 'शांति',
-  'परिवार', 'मां', 'पिता', 'भाई', 'बहन', 'दोस्त', 'गुरु', 'छात्र', 'नेता', 'किसान',
-  'डॉक्टर', 'वकील', 'इंजीनियर', 'शिक्षक', 'सैनिक', 'पुलिस', 'नर्स', 'व्यापारी', 'कारीगर', 'मजदूर',
-  'स्वास्थ्य', 'शिक्षा', 'विकास', 'प्रगति', 'स्वतंत्रता', 'न्याय', 'सत्य', 'अहिंसा', 'प्रेम', 'करुणा',
-  'खुशी', 'दुख', 'क्रोध', 'डर', 'आशा', 'विश्वास', 'साहस', 'धैर्य', 'ईमानदारी', 'मेहनत',
-  'सफलता', 'असफलता', 'संघर्ष', 'जीत', 'हार', 'अवसर', 'चुनौती', 'लक्ष्य', 'सपना', 'उड़ान',
+  'उठना', 'बैठना', 'चलना', 'आना', 'जाना', 'करना', 'हो होना', 'देना', 'लेना', 'बोलना',
+  'सुनना', 'देखना', 'sochna', 'samajhna', 'jaanna', 'maanna', 'chaahna', 'milna', 'rahna', 'banna',
+  'naya', 'purana', 'bada', 'chhota', 'achha', 'bura', 'sahi', 'galat', 'sundar', 'kathin',
+  'aasan', 'tej', 'dheema', 'ooncha', 'neecha', 'lamba', 'chauda', 'gahra', 'halka', 'bhaari',
+  'bharat', 'delhi', 'mumbai', 'jaipur', 'lucknow', 'patna', 'bhopal', 'raipur', 'kolkata', 'chennai',
+  'nadi', 'pahaad', 'jangal', 'samudra', 'aakash', 'dharti', 'hava', 'aag', 'mitti', 'patthar',
+  'suraj', 'chaand', 'tara', 'baadal', 'baarish', 'dhoop', 'chhaya', 'roshni', 'andhera', 'shanti',
+  'parivar', 'maa', 'pita', 'bhai', 'behan', 'dost', 'guru', 'chhatra', 'neta', 'kisan',
+  'doctor', 'vakeel', 'engineer', 'shikshak', 'sainik', 'police', 'nurse', 'vyaapaari', 'kaarigar', 'mazdoor',
+  'swasthya', 'shiksha', 'vikaas', 'pragati', 'swatantrata', 'nyaay', 'satya', 'ahimsa', 'prem', 'karuna',
+  'khushi', 'dukh', 'krodh', 'dar', 'aasha', 'vishwas', 'saahas', 'dhairya', 'eemandari', 'mehnat',
+  'safalta', 'asfalta', 'sangharsh', 'jeet', 'haar', 'avsar', 'chunauti', 'lakshya', 'sapna', 'udaan',
 ];
 
 // ── INSCRIPT KEYBOARD LAYOUT ──
@@ -371,7 +371,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         className={`h-48 overflow-hidden rounded-2xl p-6 border cursor-text ${c.bg}`}
         onClick={() => inputRef.current?.focus()}>
         <div className="text-2xl leading-loose font-mono select-none flex flex-wrap gap-x-4"
-          style={{ fontFamily: "'Noto Sans Devanagari', sans-serif", lineHeight: '3rem' }}>
+          style={{ fontFamily: "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif", lineHeight: '3.5rem', letterSpacing: '0.05em' }}>
           {words.map((word, wIdx) => {
             const isPast = wIdx < wordIndex;
             const isActive = wIdx === wordIndex;
@@ -462,7 +462,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
                     >
                       <span className="text-xs opacity-50">{keyData.shift}</span>
                       <span className="text-base leading-none"
-                        style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}>
+                        style={{ fontFamily: "'Noto Sans Devanagari', 'Mangal', sans-serif" }}>
                         {keyData.display}
                       </span>
                       <span className="text-[8px] opacity-30 absolute bottom-0.5">
