@@ -398,7 +398,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         disabled={finished}
         className="opacity-0 absolute pointer-events-none"
         lang="hi"
-        inputMode="none" />
+       inputMode="text"
 
       {/* Keyboard Toggle */}
       <div className="flex justify-center">
