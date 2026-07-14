@@ -1,30 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { HINDI_PARAGRAPHS } from "../lessons/HindiParagraphs";
 
-// ── HINDI WORD POOL ──
-const HINDI_WORDS = [
-  'आम', 'घर', 'पानी', 'खाना', 'काम', 'देश', 'लोग', 'बात', 'हाथ', 'दिन',
-  'रात', 'समय', 'जगह', 'साल', 'बच्चा', 'महिला', 'पुरुष', 'सरकार', 'राज्य', 'शहर',
-  'गांव', 'स्कूल', 'किताब', 'पढ़ना', 'लिखना', 'खेलना', 'दौड़ना', 'खाना', 'पीना', 'सोना',
-  'उठना', 'बैठना', 'चलना', 'आना', 'जाना', 'करना', 'होना', 'देना', 'लेना', 'बोलना',
-  'सुनना', 'देखना', 'सोचना', 'समझना', 'जानना', 'मानना', 'चाहना', 'मिलना', 'रहना', 'बनना',
-  'नया', 'पुराना', 'बड़ा', 'छोटा', 'अच्छा', 'बुरा', 'सही', 'गलत', 'सुंदर', 'कठिन',
-  'आसान', 'तेज', 'धीमा', 'ऊंचा', 'नीचा', 'लंबा', 'चौड़ा', 'गहरा', 'हल्का', 'भारी',
-  'भारत', 'दिल्ली', 'मुंबई', 'जयपुर', 'लखनऊ', 'पटना', 'भोपाल', 'रायपुर', 'कोलकाता', 'चेन्नई',
-  'नदी', 'पहाड़', 'जंगल', 'समुद्र', 'आकाश', 'धरती', 'हवा', 'आग', 'मिट्टी', 'पत्थर',
-  'सूरज', 'चांद', 'तारा', 'बादल', 'बारिश', 'धूप', 'छाया', 'रोशनी', 'अंधेरा', 'शांति',
-  'परिवार', 'मां', 'पिता', 'भाई', 'बहन', 'दोस्त', 'गुरु', 'छात्र', 'नेता', 'किसान',
-  'डॉक्टर', 'वकील', 'इंजीनियर', 'शिक्षक', 'सैनिक', 'पुलिस', 'नर्स', 'व्यापारी', 'कारीगर', 'मजदूर',
-  'स्वास्थ्य', 'शिक्षा', 'विकास', 'प्रगति', 'स्वतंत्रता', 'न्याय', 'सत्य', 'अहिंसा', 'प्रेम', 'करुणा',
-  'खुशी', 'दुख', 'क्रोध', 'डर', 'आशा', 'विश्वास', 'साहस', 'धैर्य', 'ईमानदारी', 'मेहनत',
-  'सफलता', 'असफलता', 'संघर्ष', 'जीत', 'हार', 'अवसर', 'चुनौती', 'लक्ष्य', 'सपना', 'उड़ान',
-];
-
 // ── HINDI FONT STYLE — used everywhere Hindi text appears ──
 const HINDI_FONT = {
   fontFamily: "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif",
   fontWeight: 500,
 };
+
+// ── GRAPHEME SPLITTER using Intl.Segmenter ──
+// Keeps matras attached to their base letter
+// "नदी" → ['न', 'दी'] ✅  instead of ['न', 'द', 'ी'] ❌
+const segmenter = new Intl.Segmenter('hi', { granularity: 'grapheme' });
+
+function splitHindi(word) {
+  if (!word) return [];
+  return [...segmenter.segment(word)].map(s => s.segment);
+}
 
 // ── INSCRIPT KEYBOARD LAYOUT ──
 const KEYBOARD_ROWS = [
@@ -63,7 +54,6 @@ const KEYBOARD_ROWS = [
   ],
 ];
 
-// Finger color mapping
 const FINGER_COLORS = {
   q: '#ef4444', w: '#f97316', e: '#eab308', r: '#22c55e', t: '#22c55e',
   y: '#3b82f6', u: '#3b82f6', i: '#8b5cf6', o: '#ec4899', p: '#ec4899',
@@ -83,20 +73,10 @@ const FINGER_NAMES = {
   '#ec4899': 'अनामिका/छोटी',
 };
 
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 export default function HindiTypingTest({ theme, themeStyles: t }) {
   const [words, setWords] = useState(() => {
-    const paragraph =
-      HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
-    return paragraph.split(" ");
+    const paragraph = HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
+    return paragraph.split(' ');
   });
   const [input, setInput] = useState('');
   const [wordIndex, setWordIndex] = useState(0);
@@ -165,42 +145,31 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const c = getColors();
 
-  // Find which key to press for next character
   const getNextKey = useCallback(() => {
     const currentWord = words[wordIndex] ?? '';
     if (!currentWord || input.length >= currentWord.length) return null;
     const nextChar = currentWord[input.length];
     for (const row of KEYBOARD_ROWS) {
       for (const key of row) {
-        if (key.display === nextChar || key.shift === nextChar) {
-          return key.key;
-        }
+        if (key.display === nextChar || key.shift === nextChar) return key.key;
       }
     }
     return null;
   }, [words, wordIndex, input]);
 
-  useEffect(() => {
-    setActiveKey(getNextKey());
-  }, [getNextKey]);
+  useEffect(() => { setActiveKey(getNextKey()); }, [getNextKey]);
 
-  // Timer
   useEffect(() => {
     if (!started || finished) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          finishTest();
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(timerRef.current); finishTest(); return 0; }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [started, finished]);
 
-  // CPM update
   useEffect(() => {
     if (!started || finished || !startTimeRef.current) return;
     const interval = setInterval(() => {
@@ -214,7 +183,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     return () => clearInterval(interval);
   }, [started, finished, correctWords, incorrectWords]);
 
-  // Physical keyboard highlight
   useEffect(() => {
     const handleKeyDown = (e) => {
       setPressedKey(e.key.toLowerCase());
@@ -232,51 +200,36 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const handleInput = useCallback((value) => {
     if (finished) return;
-
     if (!started && value.length > 0) {
       setStarted(true);
       startTimeRef.current = Date.now();
     }
-
     const currentWord = words[wordIndex] ?? '';
-
     if (value.endsWith(' ')) {
       const typedWord = value.trim();
       const isCorrect = typedWord === currentWord;
-
       setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
-
-      if (isCorrect) {
-        setCorrectWords(c => c + 1);
-        correctCharsRef.current += currentWord.length + 1;
-      } else {
-        setIncorrectWords(c => c + 1);
-      }
-
+      if (isCorrect) { setCorrectWords(c => c + 1); correctCharsRef.current += currentWord.length + 1; }
+      else setIncorrectWords(c => c + 1);
       const nextIndex = wordIndex + 1;
       setWordIndex(nextIndex);
       setInput('');
-
       if (nextIndex >= words.length) finishTest();
       return;
     }
-
     setInput(value);
   }, [finished, started, words, wordIndex, finishTest]);
 
-  // Virtual keyboard click
   const handleVirtualKey = (char) => {
     if (finished) return;
-    const newInput = input + char;
-    handleInput(newInput);
+    handleInput(input + char);
     inputRef.current?.focus();
   };
 
   const reset = () => {
     clearInterval(timerRef.current);
-    const paragraph =
-      HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
-    setWords(paragraph.split(" "));
+    const paragraph = HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
+    setWords(paragraph.split(' '));
     setInput('');
     setWordIndex(0);
     setWordStatuses({});
@@ -293,7 +246,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
 
-  // ── RESULTS ──
   if (finished) {
     const wpm = Math.round(cpm / 5);
     return (
@@ -302,7 +254,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
           <p className={`text-8xl font-bold tabular-nums ${c.text}`}>{cpm}</p>
           <p className={`text-xs uppercase tracking-widest mt-2 ${c.muted}`}>Characters Per Minute</p>
         </div>
-
         <div className="flex gap-6 flex-wrap justify-center">
           <div className={`text-center p-6 rounded-2xl border ${c.bg}`}>
             <p className={`text-4xl font-bold ${c.text}`}>{wpm}</p>
@@ -321,28 +272,23 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
             <p className={`text-xs uppercase ${c.muted} mt-1`}>Wrong Words</p>
           </div>
         </div>
-
         <div className={`w-full p-4 rounded-2xl border text-center ${c.bg}`}>
           <p className={`text-sm ${c.muted}`} style={HINDI_FONT}>
             {cpm >= 150 ? '🏆 शानदार! सरकारी परीक्षा के लिए तैयार!' :
              cpm >= 100 ? '🔥 बहुत अच्छा! अभ्यास जारी रखें!' :
-             cpm >= 50 ? '💪 अच्छी प्रगति!' :
-             '🌱 रोज अभ्यास करते रहें!'}
+             cpm >= 50 ? '💪 अच्छी प्रगति!' : '🌱 रोज अभ्यास करते रहें!'}
           </p>
-          <p className={`text-xs mt-1 ${c.muted}`}>
-            CPCT/SSC target: 150+ CPM with 90%+ accuracy
-          </p>
+          <p className={`text-xs mt-1 ${c.muted}`}>CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
         </div>
-
         <button onClick={reset}
-          className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}>
+          className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}
+          style={HINDI_FONT}>
           फिर से कोशिश करें
         </button>
       </div>
     );
   }
 
-  // ── TYPING AREA ──
   return (
     <div className="flex flex-col max-w-5xl mx-auto w-full gap-4">
 
@@ -379,51 +325,43 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </div>
       </div>
 
-      {/* ── TEXT DISPLAY — KEY FIX: no font-mono, Noto Sans Devanagari forced ── */}
-      <div
-        ref={containerRef}
+      {/* ── TEXT DISPLAY ── */}
+      <div ref={containerRef}
         className={`h-48 overflow-hidden rounded-2xl p-6 border cursor-text ${c.bg}`}
-        onClick={() => inputRef.current?.focus()}
-      >
+        onClick={() => inputRef.current?.focus()}>
         <div
           className="text-2xl leading-loose select-none flex flex-wrap gap-x-4"
-          style={{
-            ...HINDI_FONT,
-            lineHeight: '3.8rem',   // extra line height for matras like ि ी ु ू
-            letterSpacing: '0.02em',
-          }}
+          style={{ ...HINDI_FONT, lineHeight: '3.8rem' }}
         >
           {words.map((word, wIdx) => {
             const isPast = wIdx < wordIndex;
             const isActive = wIdx === wordIndex;
             const status = wordStatuses[wIdx];
+
+            // ✅ KEY FIX: splitHindi keeps matras with their base letter
+            const graphemes = splitHindi(word);
+            const inputGraphemes = splitHindi(input);
+
             return (
-              <span
-                key={wIdx}
-                className={`inline-block relative ${isPast && status === 'incorrect' ? 'underline decoration-red-500 decoration-2' : ''}`}
-              >
-                {/* ── CHARACTER LOOP ──
-                    We split by Unicode grapheme clusters so matras stay
-                    attached to their base letter and don't render as boxes.
-                    Array.from() handles multi-codepoint Devanagari correctly. */}
-                {Array.from(word).map((char, cIdx) => {
-                  let color = c.untyped;
-                  if (isPast) color = status === 'correct' ? c.correct : c.incorrect;
-                  else if (isActive) {
-                    if (cIdx < input.length) {
-                      color = input[cIdx] === char ? c.correct : c.incorrect;
-                    } else if (cIdx === input.length) {
-                      color = c.current;
+              <span key={wIdx}
+                className={`inline-block relative ${isPast && status === 'incorrect' ? 'underline decoration-red-500 decoration-2' : ''}`}>
+                {graphemes.map((char, cIdx) => {
+                  let colorClass = c.untyped;
+                  if (isPast) {
+                    colorClass = status === 'correct' ? c.correct : c.incorrect;
+                  } else if (isActive) {
+                    if (cIdx < inputGraphemes.length) {
+                      colorClass = inputGraphemes[cIdx] === char ? c.correct : c.incorrect;
+                    } else if (cIdx === inputGraphemes.length) {
+                      colorClass = c.current;
                     }
                   }
-                  const showCursor = isActive && cIdx === input.length;
+                  const showCursor = isActive && cIdx === inputGraphemes.length;
                   return (
-                    <span key={cIdx} className={`${color} relative inline-block`}>
+                    <span key={cIdx} className={`${colorClass} relative`}>
                       {showCursor && (
-                        <span
-                          className="absolute -left-0.5 top-0 bottom-0 w-0.5"
-                          style={{ backgroundColor: c.cursor, animation: 'blinkCursor 1s step-end infinite' }}
-                        />
+                        <span className="absolute -left-0.5 top-0 bottom-0 w-0.5"
+                          style={{ backgroundColor: c.cursor, animation: 'blinkCursor 1s step-end infinite' }} />
                       )}
                       {char}
                     </span>
@@ -435,24 +373,19 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </div>
       </div>
 
-      <input
-        ref={inputRef}
-        value={input}
+      <input ref={inputRef} value={input}
         onChange={e => handleInput(e.target.value)}
         disabled={finished}
         className="opacity-0 absolute pointer-events-none"
         lang="hi"
-        inputMode="none"
-      />
+        inputMode="none" />
 
       {/* Next key hint */}
       {activeKey && started && !finished && (
         <div className="text-center">
           <span className={`text-xs ${c.muted}`}>
-            Press: <kbd
-              className={`px-2 py-0.5 rounded text-xs font-mono border ${c.bg}`}
-              style={{ color: FINGER_COLORS[activeKey] }}
-            >
+            Press: <kbd className={`px-2 py-0.5 rounded text-xs font-mono border ${c.bg}`}
+              style={{ color: FINGER_COLORS[activeKey] }}>
               {activeKey.toUpperCase()}
             </kbd>
             <span className="ml-2" style={{ color: FINGER_COLORS[activeKey] }}>
@@ -462,12 +395,10 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </div>
       )}
 
-      {/* Virtual Keyboard Toggle */}
+      {/* Keyboard Toggle */}
       <div className="flex justify-center">
-        <button
-          onClick={() => setShowKeyboard(!showKeyboard)}
-          className={`px-4 py-1.5 rounded-lg text-xs transition-all ${theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}
-        >
+        <button onClick={() => setShowKeyboard(!showKeyboard)}
+          className={`px-4 py-1.5 rounded-lg text-xs transition-all ${theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}>
           {showKeyboard ? '⌨️ Hide Keyboard' : '⌨️ Show Keyboard'}
         </button>
       </div>
@@ -486,18 +417,15 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
                   const isPressed = pressedKey === keyData.key;
                   const fingerColor = FINGER_COLORS[keyData.key];
                   return (
-                    <button
-                      key={keyData.key}
+                    <button key={keyData.key}
                       onClick={() => handleVirtualKey(keyData.display)}
                       className={`w-12 h-12 rounded-lg text-sm border-2 transition-all flex flex-col items-center justify-center relative
-                        ${isPressed ? c.keyPressed : isActive ? c.keyActive : c.keyBg}
-                        hover:scale-110`}
+                        ${isPressed ? c.keyPressed : isActive ? c.keyActive : c.keyBg} hover:scale-110`}
                       style={{
                         borderColor: isActive || isPressed ? undefined : fingerColor + '60',
                         boxShadow: isActive ? `0 0 12px ${fingerColor}` : undefined,
                         ...HINDI_FONT,
-                      }}
-                    >
+                      }}>
                       <span className="text-xs opacity-50">{keyData.shift}</span>
                       <span className="text-base leading-none">{keyData.display}</span>
                       <span className="text-[8px] opacity-30 absolute bottom-0.5 font-mono">
@@ -508,18 +436,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
                 })}
               </div>
             ))}
-
-            {/* Space bar */}
-            <button
-              onClick={() => handleInput(input + ' ')}
+            <button onClick={() => handleInput(input + ' ')}
               className={`w-48 h-10 rounded-lg text-xs border-2 transition-all ${c.keyBg} hover:scale-105`}
-              style={HINDI_FONT}
-            >
+              style={HINDI_FONT}>
               Space (अगला शब्द)
             </button>
           </div>
-
-          {/* Finger color legend */}
           <div className="flex flex-wrap gap-3 justify-center mt-3">
             {[
               { color: '#ef4444', hindi: 'छोटी' },
