@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'KrutiDev';
+  src: url('/fonts/krutidev-010-hindi-font-download.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 @import 'tailwindcss';
 
 @theme {

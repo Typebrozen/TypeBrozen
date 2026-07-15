@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { HINDI_PARAGRAPHS } from "../lessons/HindiParagraphs";
 
-// ── HINDI FONT STYLE ──
-const HINDI_FONT = {
+// ── FONT STYLES ──
+const MANGAL_FONT = {
   fontFamily: "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif",
   fontWeight: 500,
+};
+
+const KRUTIDEV_FONT = {
+  fontFamily: "'KrutiDev', serif",
+  fontWeight: 400,
 };
 
 // ── GRAPHEME SPLITTER ──
@@ -26,76 +31,138 @@ const FINGER_COLORS = {
   p: '#f43f5e', ';': '#f43f5e',
 };
 
-// ── FULL INSCRIPT KEYBOARD LAYOUT (all 4 rows like real keyboard) ──
-const KEYBOARD_LAYOUT = [
-  // Number row
+// ── INSCRIPT KEYBOARD LAYOUT ──
+const INSCRIPT_LAYOUT = [
   [
-    { key: '`',  hi: '',   shift: '' },
-    { key: '1',  hi: '१',  shift: '!' },
-    { key: '2',  hi: '२',  shift: '@' },
-    { key: '3',  hi: '३',  shift: '#' },
-    { key: '4',  hi: '४',  shift: '$' },
-    { key: '5',  hi: '५',  shift: '%' },
-    { key: '6',  hi: '६',  shift: '^' },
-    { key: '7',  hi: '७',  shift: '&' },
-    { key: '8',  hi: '८',  shift: '*' },
-    { key: '9',  hi: '९',  shift: '(' },
-    { key: '0',  hi: '०',  shift: ')' },
-    { key: '-',  hi: '-',  shift: '_' },
-    { key: '=',  hi: '=',  shift: '+' },
-    { key: 'BKSP', hi: '←', shift: '', wide: true },
+    { key: '`', hi: '', shift: '' },
+    { key: '1', hi: '१', shift: '!' },
+    { key: '2', hi: '२', shift: '@' },
+    { key: '3', hi: '३', shift: '#' },
+    { key: '4', hi: '४', shift: '$' },
+    { key: '5', hi: '५', shift: '%' },
+    { key: '6', hi: '६', shift: '^' },
+    { key: '7', hi: '७', shift: '&' },
+    { key: '8', hi: '८', shift: '*' },
+    { key: '9', hi: '९', shift: '(' },
+    { key: '0', hi: '०', shift: ')' },
+    { key: '-', hi: '-', shift: '_' },
+    { key: '=', hi: '=', shift: '+' },
+    { key: 'BKSP', hi: 'BkSp', shift: '', wide: true },
   ],
-  // QWERTY row
   [
     { key: 'TAB', hi: 'Tab', shift: '', wide: true },
-    { key: 'q',  hi: 'ौ',  shift: 'औ' },
-    { key: 'w',  hi: 'ै',  shift: 'ऐ' },
-    { key: 'e',  hi: 'ा',  shift: 'आ' },
-    { key: 'r',  hi: 'ी',  shift: 'ई' },
-    { key: 't',  hi: 'ू',  shift: 'ऊ' },
-    { key: 'y',  hi: 'ब',  shift: 'भ' },
-    { key: 'u',  hi: 'ह',  shift: 'ङ' },
-    { key: 'i',  hi: 'ग',  shift: 'घ' },
-    { key: 'o',  hi: 'द',  shift: 'ध' },
-    { key: 'p',  hi: 'ज',  shift: 'झ' },
-    { key: '[',  hi: 'ड',  shift: 'ढ' },
-    { key: ']',  hi: '़',  shift: 'ञ' },
-    { key: '\\', hi: 'ऑ',  shift: 'ऑ' },
+    { key: 'q', hi: 'ौ', shift: 'औ' },
+    { key: 'w', hi: 'ै', shift: 'ऐ' },
+    { key: 'e', hi: 'ा', shift: 'आ' },
+    { key: 'r', hi: 'ी', shift: 'ई' },
+    { key: 't', hi: 'ू', shift: 'ऊ' },
+    { key: 'y', hi: 'ब', shift: 'भ' },
+    { key: 'u', hi: 'ह', shift: 'ङ' },
+    { key: 'i', hi: 'ग', shift: 'घ' },
+    { key: 'o', hi: 'द', shift: 'ध' },
+    { key: 'p', hi: 'ज', shift: 'झ' },
+    { key: '[', hi: 'ड', shift: 'ढ' },
+    { key: ']', hi: 'ञ', shift: 'ञ' },
+    { key: '\\', hi: 'ऑ', shift: 'ऑ' },
   ],
-  // Home row
   [
     { key: 'CAPS', hi: 'Caps', shift: '', wide: true },
-    { key: 'a',  hi: 'ो',  shift: 'ओ' },
-    { key: 's',  hi: 'े',  shift: 'ए' },
-    { key: 'd',  hi: '्',  shift: 'अ' },
-    { key: 'f',  hi: 'ि',  shift: 'इ' },
-    { key: 'g',  hi: 'ु',  shift: 'उ' },
-    { key: 'h',  hi: 'प',  shift: 'फ' },
-    { key: 'j',  hi: 'र',  shift: 'ड़' },
-    { key: 'k',  hi: 'क',  shift: 'ख' },
-    { key: 'l',  hi: 'त',  shift: 'थ' },
-    { key: ';',  hi: 'च',  shift: 'छ' },
-    { key: "'",  hi: 'ट',  shift: 'ठ' },
+    { key: 'a', hi: 'ो', shift: 'ओ' },
+    { key: 's', hi: 'े', shift: 'ए' },
+    { key: 'd', hi: '्', shift: 'अ' },
+    { key: 'f', hi: 'ि', shift: 'इ' },
+    { key: 'g', hi: 'ु', shift: 'उ' },
+    { key: 'h', hi: 'प', shift: 'फ' },
+    { key: 'j', hi: 'र', shift: 'ड़' },
+    { key: 'k', hi: 'क', shift: 'ख' },
+    { key: 'l', hi: 'त', shift: 'थ' },
+    { key: ';', hi: 'च', shift: 'छ' },
+    { key: "'", hi: 'ट', shift: 'ठ' },
     { key: 'ENTER', hi: 'Enter', shift: '', wide: true },
   ],
-  // Shift row
   [
     { key: 'SHIFT', hi: 'Shift', shift: '', wide: true },
-    { key: 'z',  hi: 'ं',  shift: 'ँ' },
-    { key: 'x',  hi: 'म',  shift: 'ण' },
-    { key: 'c',  hi: 'न',  shift: 'ञ' },
-    { key: 'v',  hi: 'व',  shift: 'ऱ' },
-    { key: 'b',  hi: 'ल',  shift: 'ळ' },
-    { key: 'n',  hi: 'स',  shift: 'श' },
-    { key: 'm',  hi: 'य',  shift: 'ष' },
-    { key: ',',  hi: ',',  shift: 'ण' },
-    { key: '.',  hi: '।',  shift: 'ॉ' },
-    { key: '/',  hi: 'य',  shift: '?' },
+    { key: 'z', hi: 'ं', shift: 'ँ' },
+    { key: 'x', hi: 'म', shift: 'ण' },
+    { key: 'c', hi: 'न', shift: 'ञ' },
+    { key: 'v', hi: 'व', shift: 'ऱ' },
+    { key: 'b', hi: 'ल', shift: 'ळ' },
+    { key: 'n', hi: 'स', shift: 'श' },
+    { key: 'm', hi: 'य', shift: 'ष' },
+    { key: ',', hi: ',', shift: 'ण' },
+    { key: '.', hi: '।', shift: 'ॉ' },
+    { key: '/', hi: '/', shift: '?' },
+    { key: 'SHIFT2', hi: 'Shift', shift: '', wide: true },
+  ],
+];
+
+// ── KRUTIDEV KEYBOARD LAYOUT ──
+const KRUTIDEV_LAYOUT = [
+  [
+    { key: '`', hi: '', shift: '' },
+    { key: '1', hi: '1', shift: '!' },
+    { key: '2', hi: '2', shift: '@' },
+    { key: '3', hi: '3', shift: '#' },
+    { key: '4', hi: '4', shift: '$' },
+    { key: '5', hi: '5', shift: '%' },
+    { key: '6', hi: '6', shift: '^' },
+    { key: '7', hi: '7', shift: '&' },
+    { key: '8', hi: '8', shift: '*' },
+    { key: '9', hi: '9', shift: '(' },
+    { key: '0', hi: '0', shift: ')' },
+    { key: '-', hi: '-', shift: '_' },
+    { key: '=', hi: '=', shift: '+' },
+    { key: 'BKSP', hi: 'BkSp', shift: '', wide: true },
+  ],
+  [
+    { key: 'TAB', hi: 'Tab', shift: '', wide: true },
+    { key: 'q', hi: 'kS', shift: 'vkS' },
+    { key: 'w', hi: 'oS', shift: 'oS' },
+    { key: 'e', hi: 'k', shift: 'vk' },
+    { key: 'r', hi: 'h', shift: 'bZ' },
+    { key: 't', hi: 'w', shift: 'mu' },
+    { key: 'y', hi: 'c', shift: 'Hk' },
+    { key: 'u', hi: 'g', shift: 'gM' },
+    { key: 'i', hi: 'x', shift: 'Xk' },
+    { key: 'o', hi: 'n', shift: 'nk' },
+    { key: 'p', hi: 't', shift: 'tk' },
+    { key: '[', hi: 'M', shift: 'Mk' },
+    { key: ']', hi: ']', shift: '}' },
+    { key: '\\', hi: '/', shift: '|' },
+  ],
+  [
+    { key: 'CAPS', hi: 'Caps', shift: '', wide: true },
+    { key: 'a', hi: 'ks', shift: 'vks' },
+    { key: 's', hi: 's', shift: 'l' },
+    { key: 'd', hi: '^', shift: 'v' },
+    { key: 'f', hi: 'f', shift: 'b' },
+    { key: 'g', hi: 'q', shift: 'm' },
+    { key: 'h', hi: 'i', shift: 'Q' },
+    { key: 'j', hi: 'j', shift: 'j' },
+    { key: 'k', hi: 'd', shift: '[k' },
+    { key: 'l', hi: 'r', shift: 'Fk' },
+    { key: ';', hi: 'p', shift: 'N' },
+    { key: "'", hi: 'V', shift: 'B' },
+    { key: 'ENTER', hi: 'Enter', shift: '', wide: true },
+  ],
+  [
+    { key: 'SHIFT', hi: 'Shift', shift: '', wide: true },
+    { key: 'z', hi: 'a', shift: 'v' },
+    { key: 'x', hi: 'e', shift: '.k' },
+    { key: 'c', hi: 'u', shift: 'U' },
+    { key: 'v', hi: 'o', shift: 'j' },
+    { key: 'b', hi: 'y', shift: 'G' },
+    { key: 'n', hi: 'l', shift: 'k' },
+    { key: 'm', hi: 'e', shift: 'E' },
+    { key: ',', hi: ',', shift: '<' },
+    { key: '.', hi: '-', shift: ':' },
+    { key: '/', hi: '/', shift: '?' },
     { key: 'SHIFT2', hi: 'Shift', shift: '', wide: true },
   ],
 ];
 
 export default function HindiTypingTest({ theme, themeStyles: t }) {
+  const [fontMode, setFontMode] = useState('mangal');
   const [words, setWords] = useState(() => {
     const paragraph = HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
     return paragraph.split(' ');
@@ -122,6 +189,8 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   const correctCharsRef = useRef(0);
 
   const TIME_OPTIONS = [1, 2, 3, 5, 10];
+  const ACTIVE_FONT = fontMode === 'krutidev' ? KRUTIDEV_FONT : MANGAL_FONT;
+  const KEYBOARD_LAYOUT = fontMode === 'krutidev' ? KRUTIDEV_LAYOUT : INSCRIPT_LAYOUT;
 
   const getColors = () => {
     if (theme === 'dark') return {
@@ -173,7 +242,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const c = getColors();
 
-  // Find next key to press
   const getNextKey = useCallback(() => {
     const currentWord = words[wordIndex] ?? '';
     if (!currentWord || input.length >= currentWord.length) return null;
@@ -184,7 +252,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       }
     }
     return null;
-  }, [words, wordIndex, input]);
+  }, [words, wordIndex, input, KEYBOARD_LAYOUT]);
 
   useEffect(() => { setActiveKey(getNextKey()); }, [getNextKey]);
 
@@ -212,7 +280,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     return () => clearInterval(interval);
   }, [started, finished, correctWords, incorrectWords]);
 
-  // Track physical key presses for highlight
   useEffect(() => {
     const handleKeyDown = (e) => {
       const k = e.key.toLowerCase();
@@ -271,7 +338,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
 
-  // ── RESULTS ──
   if (finished) {
     const wpm = Math.round(cpm / 5);
     return (
@@ -299,7 +365,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
           </div>
         </div>
         <div className={`w-full p-4 rounded-2xl border text-center ${c.bg}`}>
-          <p className={`text-sm ${c.muted}`} style={HINDI_FONT}>
+          <p className={`text-sm ${c.muted}`} style={MANGAL_FONT}>
             {cpm >= 150 ? '🏆 शानदार! सरकारी परीक्षा के लिए तैयार!' :
              cpm >= 100 ? '🔥 बहुत अच्छा! अभ्यास जारी रखें!' :
              cpm >= 50 ? '💪 अच्छी प्रगति!' : '🌱 रोज अभ्यास करते रहें!'}
@@ -308,16 +374,40 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </div>
         <button onClick={reset}
           className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}
-          style={HINDI_FONT}>
+          style={MANGAL_FONT}>
           फिर से कोशिश करें
         </button>
       </div>
     );
   }
 
-  // ── TYPING AREA ──
   return (
     <div className="flex flex-col max-w-5xl mx-auto w-full gap-4">
+
+      {/* ── FONT MODE TOGGLE ── */}
+      <div className="flex justify-center gap-2">
+        <button
+          onClick={() => { setFontMode('mangal'); reset(); }}
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${fontMode === 'mangal'
+            ? 'bg-yellow-500 text-black'
+            : theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}
+          style={MANGAL_FONT}>
+          मंगल / Mangal
+        </button>
+        <button
+          onClick={() => { setFontMode('krutidev'); reset(); }}
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${fontMode === 'krutidev'
+            ? 'bg-orange-500 text-white'
+            : theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}>
+          Kruti Dev
+        </button>
+      </div>
+
+      <p className={`text-center text-xs ${c.muted}`}>
+        {fontMode === 'mangal'
+          ? '📝 Mangal/Unicode — SSC, UPSC, Railway exams ke liye'
+          : '📝 Kruti Dev — CPCT, State PSC, MP exams ke liye'}
+      </p>
 
       {/* Time Options */}
       <div className="flex justify-center gap-2 flex-wrap">
@@ -357,7 +447,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         className={`h-48 overflow-hidden rounded-2xl p-6 border cursor-text ${c.bg}`}
         onClick={() => inputRef.current?.focus()}>
         <div className="text-2xl select-none flex flex-wrap gap-x-4"
-          style={{ ...HINDI_FONT, lineHeight: '3.8rem' }}>
+          style={{ ...ACTIVE_FONT, lineHeight: '3.8rem' }}>
           {words.map((word, wIdx) => {
             const isPast = wIdx < wordIndex;
             const isActive = wIdx === wordIndex;
@@ -392,7 +482,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </div>
       </div>
 
-      {/* Hidden input — physical keyboard types here */}
       <input ref={inputRef} value={input}
         onChange={e => handleInput(e.target.value)}
         disabled={finished}
@@ -408,13 +497,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         </button>
       </div>
 
-      {/* ── VISUAL KEYBOARD — display only, no click to type ── */}
+      {/* Visual Keyboard */}
       {showKeyboard && (
         <div className="rounded-2xl p-4 border" style={{ backgroundColor: c.keyboardBg, borderColor: c.keyBorder }}>
           <p className={`text-xs text-center mb-3 ${c.muted}`}>
-            Inscript Hindi Keyboard — अपनी उंगलियों की स्थिति देखें
+            {fontMode === 'mangal' ? 'Inscript Hindi Keyboard' : 'Kruti Dev Keyboard'} — उंगलियों की स्थिति देखें
           </p>
-
           <div className="flex flex-col gap-1.5 items-center">
             {KEYBOARD_LAYOUT.map((row, rowIdx) => (
               <div key={rowIdx} className="flex gap-1">
@@ -422,110 +510,76 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
                   const isActive = activeKey === keyData.key;
                   const isPressed = pressedKey === keyData.key;
                   const fingerColor = FINGER_COLORS[keyData.key] || '#6b7280';
-                  const isWide = keyData.wide;
                   const isFnKey = ['TAB','CAPS','SHIFT','SHIFT2','BKSP','ENTER'].includes(keyData.key);
-
                   let bgColor = c.keyBg;
                   let borderColor = fingerColor + '70';
                   let textColor = c.keyText;
                   let shadow = 'none';
-
-                  if (isPressed) {
-                    bgColor = '#22c55e';
-                    borderColor = '#16a34a';
-                    textColor = '#fff';
-                    shadow = '0 0 8px #22c55e';
-                  } else if (isActive) {
-                    bgColor = fingerColor;
-                    borderColor = fingerColor;
-                    textColor = '#fff';
-                    shadow = `0 0 14px ${fingerColor}`;
-                  } else if (isFnKey) {
-                    bgColor = c.keyWideBg;
-                    borderColor = c.keyBorder;
-                  }
-
+                  if (isPressed) { bgColor = '#22c55e'; borderColor = '#16a34a'; textColor = '#fff'; shadow = '0 0 8px #22c55e'; }
+                  else if (isActive) { bgColor = fingerColor; borderColor = fingerColor; textColor = '#fff'; shadow = '0 0 14px ' + fingerColor; }
+                  else if (isFnKey) { bgColor = c.keyWideBg; borderColor = c.keyBorder; }
                   return (
-                    <div
-                      key={keyData.key}
-                      style={{
-                        backgroundColor: bgColor,
-                        border: `1.5px solid ${borderColor}`,
-                        color: textColor,
-                        boxShadow: shadow,
-                        width: isWide ? (keyData.key === 'BKSP' ? '72px' : keyData.key === 'ENTER' ? '80px' : keyData.key === 'SHIFT' || keyData.key === 'SHIFT2' ? '88px' : '60px') : '40px',
-                        height: '44px',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative',
-                        transition: 'all 0.1s',
-                        cursor: 'default',
-                        userSelect: 'none',
-                      }}
-                    >
+                    <div key={keyData.key} style={{
+                      backgroundColor: bgColor,
+                      border: '1.5px solid ' + borderColor,
+                      color: textColor,
+                      boxShadow: shadow,
+                      width: isFnKey ? (keyData.key === 'BKSP' ? '72px' : keyData.key === 'ENTER' ? '80px' : '88px') : '40px',
+                      height: '44px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      transition: 'all 0.1s',
+                      cursor: 'default',
+                      userSelect: 'none',
+                    }}>
                       {isFnKey ? (
                         <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'monospace' }}>{keyData.hi}</span>
                       ) : (
                         <>
-                          {/* Shift label top */}
-                          <span style={{ fontSize: '8px', opacity: 0.5, lineHeight: 1, ...HINDI_FONT }}>
-                            {keyData.shift}
-                          </span>
-                          {/* Main Hindi label */}
-                          <span style={{ fontSize: '13px', lineHeight: 1, ...HINDI_FONT }}>
-                            {keyData.hi}
-                          </span>
-                          {/* Physical key label bottom */}
-                          <span style={{ fontSize: '7px', opacity: 0.3, position: 'absolute', bottom: '2px', fontFamily: 'monospace' }}>
-                            {keyData.key.toUpperCase()}
-                          </span>
+                          <span style={{ fontSize: '8px', opacity: 0.5, lineHeight: 1, ...ACTIVE_FONT }}>{keyData.shift}</span>
+                          <span style={{ fontSize: '13px', lineHeight: 1, ...ACTIVE_FONT }}>{keyData.hi}</span>
+                          <span style={{ fontSize: '7px', opacity: 0.3, position: 'absolute', bottom: '2px', fontFamily: 'monospace' }}>{keyData.key.toUpperCase()}</span>
                         </>
                       )}
-                      {/* Finger color dot */}
                       {!isFnKey && !isActive && !isPressed && (
-                        <div style={{
-                          position: 'absolute', top: '2px', right: '2px',
-                          width: '4px', height: '4px', borderRadius: '50%',
-                          backgroundColor: fingerColor, opacity: 0.8,
-                        }} />
+                        <div style={{ position: 'absolute', top: '2px', right: '2px', width: '4px', height: '4px', borderRadius: '50%', backgroundColor: fingerColor, opacity: 0.8 }} />
                       )}
                     </div>
                   );
                 })}
               </div>
             ))}
-
-            {/* Spacebar row */}
+            {/* Spacebar */}
             <div className="flex gap-1 items-center">
-              <div style={{ width: '60px', height: '36px', backgroundColor: c.keyWideBg, border: `1.5px solid ${c.keyBorder}`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+              <div style={{ width: '60px', height: '36px', backgroundColor: c.keyWideBg, border: '1.5px solid ' + c.keyBorder, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '8px', opacity: 0.5, fontFamily: 'monospace' }}>Ctrl</span>
               </div>
-              <div style={{ width: '40px', height: '36px', backgroundColor: c.keyWideBg, border: `1.5px solid ${c.keyBorder}`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+              <div style={{ width: '40px', height: '36px', backgroundColor: c.keyWideBg, border: '1.5px solid ' + c.keyBorder, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '8px', opacity: 0.5, fontFamily: 'monospace' }}>Alt</span>
               </div>
               <div style={{
                 width: '260px', height: '36px',
                 backgroundColor: pressedKey === ' ' ? '#22c55e' : c.keyBg,
-                border: `1.5px solid ${pressedKey === ' ' ? '#16a34a' : c.keyBorder}`,
+                border: '1.5px solid ' + (pressedKey === ' ' ? '#16a34a' : c.keyBorder),
                 borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'default', transition: 'all 0.1s',
+                transition: 'all 0.1s',
                 boxShadow: pressedKey === ' ' ? '0 0 8px #22c55e' : 'none',
               }}>
                 <span style={{ fontSize: '9px', opacity: 0.5, fontFamily: 'monospace', color: c.keyText }}>SPACE — अगला शब्द</span>
               </div>
-              <div style={{ width: '40px', height: '36px', backgroundColor: c.keyWideBg, border: `1.5px solid ${c.keyBorder}`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+              <div style={{ width: '40px', height: '36px', backgroundColor: c.keyWideBg, border: '1.5px solid ' + c.keyBorder, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '8px', opacity: 0.5, fontFamily: 'monospace' }}>Alt</span>
               </div>
-              <div style={{ width: '60px', height: '36px', backgroundColor: c.keyWideBg, border: `1.5px solid ${c.keyBorder}`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+              <div style={{ width: '60px', height: '36px', backgroundColor: c.keyWideBg, border: '1.5px solid ' + c.keyBorder, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: '8px', opacity: 0.5, fontFamily: 'monospace' }}>Ctrl</span>
               </div>
             </div>
           </div>
-
-          {/* Finger color legend */}
+          {/* Finger legend */}
           <div className="flex flex-wrap gap-3 justify-center mt-3">
             {[
               { color: '#ef4444', hindi: 'छोटी' },
@@ -538,7 +592,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
             ].map(f => (
               <div key={f.color} className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
-                <span className={`text-xs ${c.muted}`} style={HINDI_FONT}>{f.hindi}</span>
+                <span className={`text-xs ${c.muted}`} style={MANGAL_FONT}>{f.hindi}</span>
               </div>
             ))}
           </div>
