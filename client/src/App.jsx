@@ -86,7 +86,6 @@ export default function App() {
 
       <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <p className={`text-xs ${t.sub}`}>Jai Shree Ram</p>
           <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
             Type<span className="text-yellow-500">Hanuman</span>
           </h1>

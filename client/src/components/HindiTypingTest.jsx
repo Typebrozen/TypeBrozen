@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { HINDI_PARAGRAPHS } from "../lessons/HindiParagraphs";
+import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 
 // ── FONT STYLES ──
 const MANGAL_FONT = {
@@ -96,10 +96,10 @@ const INSCRIPT_LAYOUT = [
   ],
 ];
 
-// ── KRUTIDEV KEYBOARD LAYOUT ──
+// ── KRUTIDEV KEYBOARD LAYOUT (Standard Remington) ──
 const KRUTIDEV_LAYOUT = [
   [
-    { key: '`', hi: '', shift: '' },
+    { key: '`', hi: '`', shift: '~' },
     { key: '1', hi: '1', shift: '!' },
     { key: '2', hi: '2', shift: '@' },
     { key: '3', hi: '3', shift: '#' },
@@ -116,46 +116,46 @@ const KRUTIDEV_LAYOUT = [
   ],
   [
     { key: 'TAB', hi: 'Tab', shift: '', wide: true },
-    { key: 'q', hi: 'kS', shift: 'vkS' },
-    { key: 'w', hi: 'oS', shift: 'oS' },
-    { key: 'e', hi: 'k', shift: 'vk' },
-    { key: 'r', hi: 'h', shift: 'bZ' },
-    { key: 't', hi: 'w', shift: 'mu' },
-    { key: 'y', hi: 'c', shift: 'Hk' },
-    { key: 'u', hi: 'g', shift: 'gM' },
-    { key: 'i', hi: 'x', shift: 'Xk' },
-    { key: 'o', hi: 'n', shift: 'nk' },
-    { key: 'p', hi: 't', shift: 'tk' },
-    { key: '[', hi: 'M', shift: 'Mk' },
+    { key: 'q', hi: 'q', shift: 'Q' },
+    { key: 'w', hi: 'w', shift: 'W' },
+    { key: 'e', hi: 'e', shift: 'E' },
+    { key: 'r', hi: 'r', shift: 'R' },
+    { key: 't', hi: 't', shift: 'T' },
+    { key: 'y', hi: 'y', shift: 'Y' },
+    { key: 'u', hi: 'u', shift: 'U' },
+    { key: 'i', hi: 'i', shift: 'I' },
+    { key: 'o', hi: 'o', shift: 'O' },
+    { key: 'p', hi: 'p', shift: 'P' },
+    { key: '[', hi: '[', shift: '{' },
     { key: ']', hi: ']', shift: '}' },
-    { key: '\\', hi: '/', shift: '|' },
+    { key: '\\', hi: '\\', shift: '|' },
   ],
   [
     { key: 'CAPS', hi: 'Caps', shift: '', wide: true },
-    { key: 'a', hi: 'ks', shift: 'vks' },
-    { key: 's', hi: 's', shift: 'l' },
-    { key: 'd', hi: '^', shift: 'v' },
-    { key: 'f', hi: 'f', shift: 'b' },
-    { key: 'g', hi: 'q', shift: 'm' },
-    { key: 'h', hi: 'i', shift: 'Q' },
-    { key: 'j', hi: 'j', shift: 'j' },
-    { key: 'k', hi: 'd', shift: '[k' },
-    { key: 'l', hi: 'r', shift: 'Fk' },
-    { key: ';', hi: 'p', shift: 'N' },
-    { key: "'", hi: 'V', shift: 'B' },
+    { key: 'a', hi: 'a', shift: 'A' },
+    { key: 's', hi: 's', shift: 'S' },
+    { key: 'd', hi: 'd', shift: 'D' },
+    { key: 'f', hi: 'f', shift: 'F' },
+    { key: 'g', hi: 'g', shift: 'G' },
+    { key: 'h', hi: 'h', shift: 'H' },
+    { key: 'j', hi: 'j', shift: 'J' },
+    { key: 'k', hi: 'k', shift: 'K' },
+    { key: 'l', hi: 'l', shift: 'L' },
+    { key: ';', hi: ';', shift: ':' },
+    { key: "'", hi: "'", shift: '"' },
     { key: 'ENTER', hi: 'Enter', shift: '', wide: true },
   ],
   [
     { key: 'SHIFT', hi: 'Shift', shift: '', wide: true },
-    { key: 'z', hi: 'a', shift: 'v' },
-    { key: 'x', hi: 'e', shift: '.k' },
-    { key: 'c', hi: 'u', shift: 'U' },
-    { key: 'v', hi: 'o', shift: 'j' },
-    { key: 'b', hi: 'y', shift: 'G' },
-    { key: 'n', hi: 'l', shift: 'k' },
-    { key: 'm', hi: 'e', shift: 'E' },
+    { key: 'z', hi: 'z', shift: 'Z' },
+    { key: 'x', hi: 'x', shift: 'X' },
+    { key: 'c', hi: 'c', shift: 'C' },
+    { key: 'v', hi: 'v', shift: 'V' },
+    { key: 'b', hi: 'b', shift: 'B' },
+    { key: 'n', hi: 'n', shift: 'N' },
+    { key: 'm', hi: 'm', shift: 'M' },
     { key: ',', hi: ',', shift: '<' },
-    { key: '.', hi: '-', shift: ':' },
+    { key: '.', hi: '.', shift: '>' },
     { key: '/', hi: '/', shift: '?' },
     { key: 'SHIFT2', hi: 'Shift', shift: '', wide: true },
   ],
@@ -318,9 +318,13 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     setInput(value);
   }, [finished, started, words, wordIndex, finishTest]);
 
-  const reset = () => {
+  const reset = (modeToUse = fontMode) => {
     clearInterval(timerRef.current);
-    const paragraph = HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
+    
+    // Pick the correct array based on the mode!
+    const sourceArray = modeToUse === 'krutidev' ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+    const paragraph = sourceArray[Math.floor(Math.random() * sourceArray.length)];
+    
     setWords(paragraph.split(' '));
     setInput('');
     setWordIndex(0);
@@ -372,7 +376,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
           </p>
           <p className={`text-xs mt-1 ${c.muted}`}>CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
         </div>
-        <button onClick={reset}
+        <button onClick={() => reset()}
           className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}
           style={MANGAL_FONT}>
           फिर से कोशिश करें
@@ -387,7 +391,10 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       {/* ── FONT MODE TOGGLE ── */}
       <div className="flex justify-center gap-2">
         <button
-          onClick={() => { setFontMode('mangal'); reset(); }}
+          onClick={() => { 
+            setFontMode('mangal'); 
+            reset('mangal');
+          }}
           className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${fontMode === 'mangal'
             ? 'bg-yellow-500 text-black'
             : theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}
@@ -395,7 +402,10 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
           मंगल / Mangal
         </button>
         <button
-          onClick={() => { setFontMode('krutidev'); reset(); }}
+          onClick={() => { 
+            setFontMode('krutidev'); 
+            reset('krutidev');
+          }}
           className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${fontMode === 'krutidev'
             ? 'bg-orange-500 text-white'
             : theme === 'dark' ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-gray-100 text-gray-500'}`}>
@@ -602,7 +612,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       <p className={`text-center text-xs ${c.muted}`}>
         💡 Physical keyboard se type karo — keyboard pe next key highlight hogi
       </p>
-      <button onClick={reset} className={`mx-auto text-sm ${c.muted}`}>Reset</button>
+      <button onClick={() => reset()} className={`mx-auto text-sm ${c.muted}`}>Reset</button>
     </div>
   );
 }
