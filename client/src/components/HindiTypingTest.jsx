@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
 import { toGraphemeSpans } from "../engine/graphemes";
+import { toKrutiSpans } from "../engine/krutiSpans";
 import { resolvePhysicalKey } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
+import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { MANGAL_KEYMAP } from "../layouts/mangal-keymap";
-import { HINDI_PARAGRAPHS } from "../lessons/HindiParagraphs";
+import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 
 const IGNORED_KEYS = new Set([
@@ -16,8 +18,8 @@ const IGNORED_KEYS = new Set([
 const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10];
 const DEFAULT_MINUTES = 1;
 
-function randomParagraph() {
-  return HINDI_PARAGRAPHS[Math.floor(Math.random() * HINDI_PARAGRAPHS.length)];
+function randomParagraph(source) {
+  return source[Math.floor(Math.random() * source.length)];
 }
 
 function encouragement(cpm) {
@@ -28,22 +30,34 @@ function encouragement(cpm) {
 }
 
 export default function HindiTypingTest() {
-  const [selectedTime, setSelectedTime] = useState(DEFAULT_MINUTES * 60); // seconds
-  const [state, setState] = useState(() => createInitialState(randomParagraph(), DEFAULT_MINUTES * 60 * 1000));
+  // "mangal" or "krutidev" — decides font, data source, and key handling
+  const [mode, setMode] = useState("mangal");
+  const [selectedTime, setSelectedTime] = useState(DEFAULT_MINUTES * 60);
+  const [state, setState] = useState(() =>
+    createInitialState(randomParagraph(HINDI_PARAGRAPHS), DEFAULT_MINUTES * 60 * 1000)
+  );
   const [now, setNow] = useState(() => Date.now());
 
+  const sourceParagraphs = mode === "krutidev" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+
   const reset = useCallback(
-    (durationSeconds = selectedTime) => {
-      setState(createInitialState(randomParagraph(), durationSeconds * 1000));
+    (durationSeconds = selectedTime, activeMode = mode) => {
+      const source = activeMode === "krutidev" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+      setState(createInitialState(randomParagraph(source), durationSeconds * 1000));
       setNow(Date.now());
     },
-    [selectedTime]
+    [selectedTime, mode]
   );
 
   const handleSelectTime = (minutes) => {
     const seconds = minutes * 60;
     setSelectedTime(seconds);
     reset(seconds);
+  };
+
+  const handleSelectMode = (newMode) => {
+    setMode(newMode);
+    reset(selectedTime, newMode);
   };
 
   // Keyboard input
@@ -56,7 +70,7 @@ export default function HindiTypingTest() {
 
       if (e.code === "Space") {
         setState((prev) => commitWord(prev));
-        setNow(Date.now()); // keeps the finish timestamp accurate if this was the last word
+        setNow(Date.now());
         return;
       }
       if (e.code === "Backspace") {
@@ -64,24 +78,25 @@ export default function HindiTypingTest() {
         return;
       }
 
-      // Use the PHYSICAL key position, not e.key — this is what makes
-      // typing work no matter what keyboard language the visitor's OS
-      // has active. See engine/physicalKey.ts for why.
       const resolvedKey = resolvePhysicalKey(e);
       if (!resolvedKey) return;
 
-      const char = MANGAL_KEYMAP[resolvedKey];
-      if (!char) return; // unmapped key, ignore
-
-      setState((prev) => appendChar(prev, char));
+      if (mode === "krutidev") {
+        // Krutidev: physical key -> raw ASCII char, no keymap lookup needed.
+        setState((prev) => appendChar(prev, resolvedKey));
+      } else {
+        // Mangal: physical key -> Unicode Devanagari char via keymap.
+        const char = MANGAL_KEYMAP[resolvedKey];
+        if (!char) return;
+        setState((prev) => appendChar(prev, char));
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state.finished]);
+  }, [state.finished, mode]);
 
-  // Timer ticking — separate from typing. Checks every 250ms whether the
-  // selected duration has run out, and keeps `now` fresh for the display.
+  // Timer
   useEffect(() => {
     if (state.finished) return;
     const interval = setInterval(() => {
@@ -93,6 +108,10 @@ export default function HindiTypingTest() {
   }, [state.finished]);
 
   const elapsedMs = state.startTime ? now - state.startTime : 0;
+  const fontFamily =
+    mode === "krutidev"
+      ? "'Kruti Dev 010', sans-serif"
+      : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
   // ── RESULTS SCREEN ──
   if (state.finished) {
@@ -143,9 +162,12 @@ export default function HindiTypingTest() {
 
   // ── TYPING SCREEN ──
   const activeWord = state.words[state.wordIndex] ?? "";
-  const nextKeyInfo = state.typed.length >= activeWord.length
-    ? { label: " ", shift: false }
-    : getNextKeyInfo(activeWord[state.typed.length]);
+  const nextKeyInfo =
+    state.typed.length >= activeWord.length
+      ? { label: " ", shift: false }
+      : mode === "krutidev"
+      ? getNextKrutiKeyInfo(activeWord[state.typed.length])
+      : getNextKeyInfo(activeWord[state.typed.length]);
 
   const remainingSeconds = state.startTime
     ? Math.max(0, Math.ceil((state.durationMs - elapsedMs) / 1000))
@@ -156,6 +178,26 @@ export default function HindiTypingTest() {
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8">
+      {/* Mode selector — Mangal vs Krutidev */}
+      <div className="flex justify-center gap-2">
+        <button
+          onClick={() => handleSelectMode("mangal")}
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+            mode === "mangal" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+          }`}
+        >
+          Mangal (Unicode)
+        </button>
+        <button
+          onClick={() => handleSelectMode("krutidev")}
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+            mode === "krutidev" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+          }`}
+        >
+          Krutidev 010
+        </button>
+      </div>
+
       {/* Time selector */}
       <div className="flex justify-center gap-2 flex-wrap">
         {TIME_OPTIONS_MIN.map((min) => (
@@ -180,10 +222,7 @@ export default function HindiTypingTest() {
 
       <div
         className="text-2xl flex flex-wrap gap-x-3"
-        style={{
-          fontFamily: "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif",
-          lineHeight: "3.5rem",
-        }}
+        style={{ fontFamily, lineHeight: "3.5rem" }}
       >
         {state.words.map((word, wIdx) => {
           if (wIdx < state.wordIndex) {
@@ -199,7 +238,7 @@ export default function HindiTypingTest() {
           }
 
           if (wIdx === state.wordIndex) {
-            const spans = toGraphemeSpans(word);
+            const spans = mode === "krutidev" ? toKrutiSpans(word) : toGraphemeSpans(word);
             const typed = state.typed;
 
             return (

@@ -1,9 +1,6 @@
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP } from "../layouts/mangal-keymap";
 
-// Real physical keyboards don't use uniform-width keys — each row is
-// built from "units" (u) matching an actual keyboard's proportions,
-// so this looks like a real keyboard, not a plain grid of boxes.
 const UNIT = 42;
 const GAP = 6;
 
@@ -68,7 +65,20 @@ function widthPx(u) {
   return u * UNIT + (u - 1) * GAP;
 }
 
-export default function VirtualKeyboard({ nextKey }) {
+// mode: "mangal" | "krutidev" — decides which glyph set + font to draw
+export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
+  const glyphFontFamily =
+    mode === "krutidev" ? "'Kruti Dev 010', sans-serif" : "'Noto Sans Devanagari', 'Mangal', sans-serif";
+
+  // For Mangal: look up the real Unicode char from the keymap.
+  // For Krutidev: the key label itself IS the raw character the font
+  // draws as a glyph — no lookup table needed, just render it in the
+  // Kruti Dev font and the browser does the glyph swap visually.
+  function glyphFor(label) {
+    if (mode === "krutidev") return label;
+    return MANGAL_KEYMAP[label] ?? "";
+  }
+
   return (
     <div className="rounded-2xl p-5 border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950">
       <div className="flex flex-col gap-1.5 items-center">
@@ -103,8 +113,8 @@ export default function VirtualKeyboard({ nextKey }) {
 
               const base = CODE_TO_BASE_KEY[code];
               const shiftLabel = getShiftedLabel(base);
-              const baseGlyph = MANGAL_KEYMAP[base] ?? "";
-              const shiftGlyph = MANGAL_KEYMAP[shiftLabel] ?? "";
+              const baseGlyph = glyphFor(base);
+              const shiftGlyph = glyphFor(shiftLabel);
 
               const isActiveBase = nextKey && !nextKey.shift && nextKey.label === base;
               const isActiveShift = nextKey && nextKey.shift && nextKey.label === shiftLabel;
@@ -122,8 +132,8 @@ export default function VirtualKeyboard({ nextKey }) {
                       : "bg-gradient-to-b from-zinc-800 to-zinc-900 border-zinc-950 text-zinc-200",
                   ].join(" ")}
                 >
-                  <span style={{ fontSize: 9, opacity: 0.55 }}>{shiftGlyph}</span>
-                  <span style={{ fontSize: 15 }}>{baseGlyph}</span>
+                  <span style={{ fontSize: 9, opacity: 0.55, fontFamily: glyphFontFamily }}>{shiftGlyph}</span>
+                  <span style={{ fontSize: 15, fontFamily: glyphFontFamily }}>{baseGlyph}</span>
                 </div>
               );
             })}
