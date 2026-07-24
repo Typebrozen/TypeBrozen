@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
 import { toGraphemeSpans } from "../engine/graphemes";
 import { toKrutiSpans } from "../engine/krutiSpans";
-import { resolvePhysicalKey } from "../engine/physicalKey";
+import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
-import { MANGAL_KEYMAP } from "../layouts/mangal-keymap";
+import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 
@@ -84,6 +84,12 @@ export default function HindiTypingTest() {
       if (mode === "krutidev") {
         // Krutidev: physical key -> raw ASCII char, no keymap lookup needed.
         setState((prev) => appendChar(prev, resolvedKey));
+      } else if (e.altKey) {
+        // AltGr layer — nukta letters jaise ढ़
+        const base = resolveAltGrKey(e);
+        const nuktaChar = base ? NUKTA_KEYMAP[base] : null;
+        if (!nuktaChar) return;
+        setState((prev) => appendChar(prev, nuktaChar));
       } else {
         // Mangal: physical key -> Unicode Devanagari char via keymap.
         const char = MANGAL_KEYMAP[resolvedKey];
@@ -277,7 +283,18 @@ export default function HindiTypingTest() {
         })}
       </div>
 
-      <VirtualKeyboard nextKey={nextKeyInfo} />
+      <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} />
+
+      {/* Notice board — sirf tab dikhta hai jab agla character special/
+          hard-to-type ho (jaise AltGr wale nukta letters). Normal typing
+          mein ye chhupa rehta hai, taaki flow disturb na ho. */}
+      {nextKeyInfo?.altGr && (
+        <div className="text-center p-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
+          <p className="text-sm text-yellow-200">
+            ⚠️ विशेष अक्षर — <strong>Right Alt + {nextKeyInfo.label}</strong> एक साथ दबाएं
+          </p>
+        </div>
+      )}
 
       <button onClick={() => reset()} className="mx-auto text-sm text-gray-500 underline">
         Reset

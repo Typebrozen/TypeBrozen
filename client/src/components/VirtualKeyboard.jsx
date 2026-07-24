@@ -1,5 +1,5 @@
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
-import { MANGAL_KEYMAP } from "../layouts/mangal-keymap";
+import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 
 const UNIT = 42;
 const GAP = 6;
@@ -65,15 +65,11 @@ function widthPx(u) {
   return u * UNIT + (u - 1) * GAP;
 }
 
-// mode: "mangal" | "krutidev" — decides which glyph set + font to draw
+// mode: "mangal" | "krutidev"
 export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
   const glyphFontFamily =
     mode === "krutidev" ? "'Kruti Dev 010', sans-serif" : "'Noto Sans Devanagari', 'Mangal', sans-serif";
 
-  // For Mangal: look up the real Unicode char from the keymap.
-  // For Krutidev: the key label itself IS the raw character the font
-  // draws as a glyph — no lookup table needed, just render it in the
-  // Kruti Dev font and the browser does the glyph swap visually.
   function glyphFor(label) {
     if (mode === "krutidev") return label;
     return MANGAL_KEYMAP[label] ?? "";
@@ -90,9 +86,12 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
 
               if (FUNCTION_KEYS.has(code)) {
                 const isShiftHighlight =
-                  nextKey?.shift && (code === "ShiftLeft" || code === "ShiftRight");
+                  nextKey?.shift && !nextKey?.altGr && (code === "ShiftLeft" || code === "ShiftRight");
+                // AltGr guidance ke waqt hum Right Alt ko highlight karte hain,
+                // kyunki asli AltGr keyboards pe wahi key hoti hai.
+                const isAltGrHighlight = nextKey?.altGr && code === "AltRight";
                 const isSpaceHighlight = code === "Space" && nextKey?.label === " ";
-                const active = isShiftHighlight || isSpaceHighlight;
+                const active = isShiftHighlight || isAltGrHighlight || isSpaceHighlight;
 
                 return (
                   <div
@@ -115,10 +114,13 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               const shiftLabel = getShiftedLabel(base);
               const baseGlyph = glyphFor(base);
               const shiftGlyph = glyphFor(shiftLabel);
+              // Nukta letter is base key ke AltGr layer pe hai (Mangal mode only)
+              const nuktaGlyph = mode === "mangal" ? NUKTA_KEYMAP[base] : null;
 
-              const isActiveBase = nextKey && !nextKey.shift && nextKey.label === base;
-              const isActiveShift = nextKey && nextKey.shift && nextKey.label === shiftLabel;
-              const active = isActiveBase || isActiveShift;
+              const isActiveBase = nextKey && !nextKey.shift && !nextKey.altGr && nextKey.label === base;
+              const isActiveShift = nextKey && nextKey.shift && !nextKey.altGr && nextKey.label === shiftLabel;
+              const isActiveAltGr = nextKey && nextKey.altGr && nextKey.label === base;
+              const active = isActiveBase || isActiveShift || isActiveAltGr;
 
               return (
                 <div
@@ -134,6 +136,13 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
                 >
                   <span style={{ fontSize: 9, opacity: 0.55, fontFamily: glyphFontFamily }}>{shiftGlyph}</span>
                   <span style={{ fontSize: 15, fontFamily: glyphFontFamily }}>{baseGlyph}</span>
+                  {nuktaGlyph && (
+                    <span
+                      style={{ fontSize: 8, opacity: isActiveAltGr ? 1 : 0.4, color: "#facc15" }}
+                    >
+                      {nuktaGlyph}
+                    </span>
+                  )}
                 </div>
               );
             })}
