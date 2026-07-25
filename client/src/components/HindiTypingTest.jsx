@@ -6,6 +6,7 @@ import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 
@@ -81,7 +82,14 @@ export default function HindiTypingTest() {
       const resolvedKey = resolvePhysicalKey(e);
       if (!resolvedKey) return;
 
-      if (mode === "krutidev") {
+      if (mode === "krutidev" && e.altKey) {
+        // Extended Krutidev characters (jaise Å, ª) jo standard ASCII
+        // se bahar hain — AltGr layer pe rakhe hain.
+        const base = resolveAltGrKey(e);
+        const extendedChar = base ? KRUTI_EXTENDED_KEYMAP[base] : null;
+        if (!extendedChar) return;
+        setState((prev) => appendChar(prev, extendedChar));
+      } else if (mode === "krutidev") {
         // Krutidev: physical key -> raw ASCII char, no keymap lookup needed.
         setState((prev) => appendChar(prev, resolvedKey));
       } else if (e.altKey) {
@@ -173,7 +181,7 @@ export default function HindiTypingTest() {
       ? { label: " ", shift: false }
       : mode === "krutidev"
       ? getNextKrutiKeyInfo(activeWord[state.typed.length])
-      : getNextKeyInfo(activeWord[state.typed.length]);
+      : getNextKeyInfo(activeWord.slice(state.typed.length));
 
   const remainingSeconds = state.startTime
     ? Math.max(0, Math.ceil((state.durationMs - elapsedMs) / 1000))
@@ -291,7 +299,7 @@ export default function HindiTypingTest() {
       {nextKeyInfo?.altGr && (
         <div className="text-center p-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
           <p className="text-sm text-yellow-200">
-            ⚠️ विशेष अक्षर — <strong>Right Alt + {nextKeyInfo.label}</strong> एक साथ दबाएं
+            ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
           </p>
         </div>
       )}

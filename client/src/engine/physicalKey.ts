@@ -33,6 +33,9 @@ export const SHIFT_SYMBOL: Record<string, string> = {
   ";": ":", "'": '"',
   "[": "{", "]": "}", "\\": "|",
   "-": "_", "=": "+",
+  "`": "~",
+  "1": "!", "2": "@", "3": "#", "4": "$", "5": "%",
+  "6": "^", "7": "&", "8": "*", "9": "(", "0": ")",
 };
 
 const SHIFT_SYMBOL_VALUES = new Set(Object.values(SHIFT_SYMBOL));
@@ -55,11 +58,15 @@ export function resolvePhysicalKey(e: { code: string; shiftKey: boolean }): stri
 
   if (!e.shiftKey) return base;
   return getShiftedLabel(base);
-}// Nukta letters (borrowed sounds) ek alag AltGr layer pe rehte hain,
+}
+
+// Nukta letters (borrowed sounds) ek alag AltGr layer pe rehte hain,
 // normal Inscript layout se separate. Aage aur nukta letters
 // (क़, ख़, ग़, ज़, फ़, य़) chahiye ho toh yahin add kar dena.
 export const NUKTA_KEYMAP: Record<string, string> = {
   "[": "ढ़",
-};export function resolveAltGrKey(e: { code: string }): string | null {
+};
+
+export function resolveAltGrKey(e: { code: string }): string | null {
   return CODE_TO_BASE_KEY[e.code] ?? null;
 }

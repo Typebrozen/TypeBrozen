@@ -1,5 +1,6 @@
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 
 const UNIT = 42;
 const GAP = 6;
@@ -114,8 +115,9 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               const shiftLabel = getShiftedLabel(base);
               const baseGlyph = glyphFor(base);
               const shiftGlyph = glyphFor(shiftLabel);
-              // Nukta letter is base key ke AltGr layer pe hai (Mangal mode only)
-              const nuktaGlyph = mode === "mangal" ? NUKTA_KEYMAP[base] : null;
+              // Nukta / Extended character lookup according to layout mode
+              const nuktaGlyph =
+                mode === "mangal" ? NUKTA_KEYMAP[base] : mode === "krutidev" ? KRUTI_EXTENDED_KEYMAP[base] : null;
 
               const isActiveBase = nextKey && !nextKey.shift && !nextKey.altGr && nextKey.label === base;
               const isActiveShift = nextKey && nextKey.shift && !nextKey.altGr && nextKey.label === shiftLabel;
@@ -134,12 +136,39 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
                       : "bg-gradient-to-b from-zinc-800 to-zinc-900 border-zinc-950 text-zinc-200",
                   ].join(" ")}
                 >
-                  <span style={{ fontSize: 9, opacity: 0.55, fontFamily: glyphFontFamily }}>{shiftGlyph}</span>
-                  <span style={{ fontSize: 15, fontFamily: glyphFontFamily }}>{baseGlyph}</span>
+                  {/* Jo letter is waqt ACTUALLY type karni hai, wahi bada/bold
+                      dikhta hai — chahe wo shift wala ho ya normal wala.
+                      Baaki chhota/faded rehta hai, taaki confusion na ho. */}
+                  <span
+                    style={{
+                      fontSize: isActiveShift ? 15 : 9,
+                      fontWeight: isActiveShift ? "bold" : "normal",
+                      opacity: isActiveAltGr ? 0.1 : isActiveShift ? 1 : 0.55,
+                      fontFamily: glyphFontFamily,
+                    }}
+                  >
+                    {shiftGlyph}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: isActiveShift ? 9 : 15,
+                      fontWeight: isActiveBase ? "bold" : "normal",
+                      opacity: isActiveShift ? 0.4 : 1,
+                      fontFamily: glyphFontFamily,
+                    }}
+                  >
+                    {baseGlyph}
+                  </span>
                   {nuktaGlyph && (
                     <span
-                      style={{ fontSize: 8, opacity: isActiveAltGr ? 1 : 0.4, color: "#facc15" }}
+                      style={{
+                        fontSize: isActiveAltGr ? 12 : 8,
+                        fontWeight: isActiveAltGr ? "bold" : "normal",
+                        opacity: isActiveAltGr ? 1 : 0.4,
+                        color: "#facc15",
+                      }}
                     >
+                      {isActiveAltGr ? "🔸 " : ""}
                       {nuktaGlyph}
                     </span>
                   )}
