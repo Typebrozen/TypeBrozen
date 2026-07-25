@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
 import { toGraphemeSpans } from "../engine/graphemes";
 import { toKrutiSpans } from "../engine/krutiSpans";
@@ -19,8 +19,24 @@ const IGNORED_KEYS = new Set([
 const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10];
 const DEFAULT_MINUTES = 1;
 
+const MIN_WORDS = 70;
+
 function randomParagraph(source) {
-  return source[Math.floor(Math.random() * source.length)];
+  const usedIndexes = new Set();
+  let combined = "";
+  let wordCount = 0;
+
+  while (wordCount < MIN_WORDS && usedIndexes.size < source.length) {
+    const idx = Math.floor(Math.random() * source.length);
+    if (usedIndexes.has(idx)) continue;
+    usedIndexes.add(idx);
+
+    const piece = source[idx];
+    combined = combined ? combined + " " + piece : piece;
+    wordCount += piece.split(/\s+/).filter(Boolean).length;
+  }
+
+  return combined;
 }
 
 function encouragement(cpm) {
@@ -38,6 +54,13 @@ export default function HindiTypingTest() {
     createInitialState(randomParagraph(HINDI_PARAGRAPHS), DEFAULT_MINUTES * 60 * 1000)
   );
   const [now, setNow] = useState(() => Date.now());
+  const activeWordRef = useRef(null);
+
+  // Jab bhi current word badle, us word ko view mein rakho — box khud
+  // upar scroll ho jayega, poora paragraph screen pe kabhi nahi phailega.
+  useEffect(() => {
+    activeWordRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [state.wordIndex]);
 
   const sourceParagraphs = mode === "krutidev" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
 
@@ -83,23 +106,18 @@ export default function HindiTypingTest() {
       if (!resolvedKey) return;
 
       if (mode === "krutidev" && e.altKey) {
-        // Extended Krutidev characters (jaise Å, ª) jo standard ASCII
-        // se bahar hain — AltGr layer pe rakhe hain.
         const base = resolveAltGrKey(e);
         const extendedChar = base ? KRUTI_EXTENDED_KEYMAP[base] : null;
         if (!extendedChar) return;
         setState((prev) => appendChar(prev, extendedChar));
       } else if (mode === "krutidev") {
-        // Krutidev: physical key -> raw ASCII char, no keymap lookup needed.
         setState((prev) => appendChar(prev, resolvedKey));
       } else if (e.altKey) {
-        // AltGr layer — nukta letters jaise ढ़
         const base = resolveAltGrKey(e);
         const nuktaChar = base ? NUKTA_KEYMAP[base] : null;
         if (!nuktaChar) return;
         setState((prev) => appendChar(prev, nuktaChar));
       } else {
-        // Mangal: physical key -> Unicode Devanagari char via keymap.
         const char = MANGAL_KEYMAP[resolvedKey];
         if (!char) return;
         setState((prev) => appendChar(prev, char));
@@ -234,68 +252,69 @@ export default function HindiTypingTest() {
         <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
       </div>
 
-      <div
-        className="text-2xl flex flex-wrap gap-x-3"
-        style={{ fontFamily, lineHeight: "3.5rem" }}
-      >
-        {state.words.map((word, wIdx) => {
-          if (wIdx < state.wordIndex) {
-            const result = state.wordResults[wIdx];
+      {/* Glassy paragraph box — matches the frosted-glass style used
+          elsewhere in the app (e.g. results cards above). */}
+      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-xl">
+        <div
+          className="text-2xl flex flex-wrap gap-x-3 overflow-hidden"
+          style={{ fontFamily, lineHeight: "3.5rem", maxHeight: "17.5rem" }}
+        >
+          {state.words.map((word, wIdx) => {
+            if (wIdx < state.wordIndex) {
+              const result = state.wordResults[wIdx];
+              return (
+                <span
+                  key={wIdx}
+                  className={result === "correct" ? "text-green-600" : "text-red-500 underline decoration-2"}
+                >
+                  {word}
+                </span>
+              );
+            }
+
+            if (wIdx === state.wordIndex) {
+              const spans = mode === "krutidev" ? toKrutiSpans(word) : toGraphemeSpans(word);
+              const typed = state.typed;
+
+              return (
+                <span key={wIdx} ref={activeWordRef} className="inline-flex">
+                  {spans.map((seg, sIdx) => {
+                    let className = "text-gray-400";
+
+                    if (typed.length >= seg.end) {
+                      const typedSlice = typed.slice(seg.start, seg.end);
+                      className = typedSlice === seg.text ? "text-green-600" : "text-red-500";
+                    } else if (typed.length >= seg.start) {
+                      className = "text-gray-400 border-l-2 border-blue-500 animate-pulse";
+                    }
+
+                    return (
+                      <span key={sIdx} className={className}>
+                        {seg.text}
+                      </span>
+                    );
+                  })}
+
+                  {typed.length > word.length && (
+                    <span className="text-red-500 bg-red-100 rounded px-0.5">
+                      {typed.slice(word.length)}
+                    </span>
+                  )}
+                </span>
+              );
+            }
+
             return (
-              <span
-                key={wIdx}
-                className={result === "correct" ? "text-green-600" : "text-red-500 underline decoration-2"}
-              >
+              <span key={wIdx} className="text-gray-300">
                 {word}
               </span>
             );
-          }
-
-          if (wIdx === state.wordIndex) {
-            const spans = mode === "krutidev" ? toKrutiSpans(word) : toGraphemeSpans(word);
-            const typed = state.typed;
-
-            return (
-              <span key={wIdx} className="inline-flex">
-                {spans.map((seg, sIdx) => {
-                  let className = "text-gray-400";
-
-                  if (typed.length >= seg.end) {
-                    const typedSlice = typed.slice(seg.start, seg.end);
-                    className = typedSlice === seg.text ? "text-green-600" : "text-red-500";
-                  } else if (typed.length >= seg.start) {
-                    className = "text-gray-400 border-l-2 border-blue-500 animate-pulse";
-                  }
-
-                  return (
-                    <span key={sIdx} className={className}>
-                      {seg.text}
-                    </span>
-                  );
-                })}
-
-                {typed.length > word.length && (
-                  <span className="text-red-500 bg-red-100 rounded px-0.5">
-                    {typed.slice(word.length)}
-                  </span>
-                )}
-              </span>
-            );
-          }
-
-          return (
-            <span key={wIdx} className="text-gray-300">
-              {word}
-            </span>
-          );
-        })}
+          })}
+        </div>
       </div>
 
       <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} />
 
-      {/* Notice board — sirf tab dikhta hai jab agla character special/
-          hard-to-type ho (jaise AltGr wale nukta letters). Normal typing
-          mein ye chhupa rehta hai, taaki flow disturb na ho. */}
       {nextKeyInfo?.altGr && (
         <div className="text-center p-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
           <p className="text-sm text-yellow-200">
