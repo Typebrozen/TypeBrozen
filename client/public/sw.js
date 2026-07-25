@@ -1,4 +1,4 @@
-const CACHE_NAME = 'typehanuman-v2';
+const CACHE_NAME = 'typehanuman-v3';
 
 // Files jo offline cache honge
 const OFFLINE_FILES = [
@@ -93,7 +93,6 @@ self.addEventListener('fetch', (event) => {
             'brave', 'smart', 'happy', 'sad', 'calm', 'proud', 'kind', 'gentle',
             'quiet', 'loud', 'clean', 'fresh', 'sharp', 'smooth', 'wide', 'narrow',
           ];
-          // Shuffle
           for (let i = fallbackWords.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [fallbackWords[i], fallbackWords[j]] = [fallbackWords[j], fallbackWords[i]];
@@ -108,7 +107,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Normal files — cache first, network fallback
+  // HTML pages (jaise index.html) — HAMESHA pehle network se fetch karo,
+  // taaki naye deploy ke baad turant naya version mile, purana JS
+  // reference karta hua stale HTML kabhi na dikhe. Offline hone par
+  // hi cache se dikhao.
+  const isNavigationRequest =
+    event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') || '').includes('text/html');
+
+  if (isNavigationRequest) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // Baaki files (JS, CSS, images, fonts — jinke naam unique/hashed hote
+  // hain) — cache first theek hai, kyunki inka content kabhi nahi
+  // badalta ek baar ban jaane ke baad.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
