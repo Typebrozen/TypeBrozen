@@ -180,3 +180,14 @@ body {
 .animate-bounce-slow {
   animation: bounce-slow 2s ease-in-out infinite;
 }
+
+/* Hides scrollbar visually while keeping scroll functionality —
+   used for the Hindi typing paragraph box so it scrolls smoothly
+   as you type without a visible scrollbar cluttering the UI. */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
