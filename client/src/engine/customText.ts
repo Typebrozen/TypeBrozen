@@ -1,23 +1,20 @@
 // ======================================================
-// Custom Paragraph — Format Detection + Safety Filter
-//
-// User jo bhi text paste kare, hum:
-// 1. Pehchante hain ki wo Mangal (Unicode) hai ya Krutidev (ASCII)
-// 2. Har word ko humare hi keyboard-logic se "simulate" karke check
-//    karte hain ki poora type ho sakta hai ya nahi
-// 3. Jo words type nahi ho sakte, unhe CHUPCHAAP hata dete hain —
-//    koi error kabhi nahi dikhate, test hamesha smoothly chalta hai
+// Custom Paragraph — koi bhi mode (Mangal/Krutidev), koi bhi
+// format ka paste kiya text — usi mode mein typeable ban jata hai.
+// User jo mode select kare, wahi rahega — hum sirf text ko
+// zaroorat padne par convert karte hain, mode kabhi khud
+// nahi badalte.
 // ======================================================
 
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { CODE_TO_BASE_KEY, SHIFT_SYMBOL } from "./physicalKey";
 import { getNextKeyInfo } from "./nextKey";
+import { kru2uni } from "./kru2uni";
+import { uni2kru } from "./uni2kru";
 
 const DEVANAGARI_RANGE = /[\u0900-\u097F]/;
 
-// Agar text mein real Devanagari Unicode characters hain, wo Mangal hai.
-// Warna (sirf plain ASCII letters/symbols), wo Krutidev hai.
 export function detectHindiFormat(text: string): "mangal" | "krutidev" {
   return DEVANAGARI_RANGE.test(text) ? "mangal" : "krutidev";
 }
@@ -37,10 +34,6 @@ function isMangalWordTypeable(word: string): boolean {
   return typed === word;
 }
 
-// Krutidev mein sirf wahi characters "asli/typeable" hain jo kisi physical
-// key se seedha ya Shift se ya AltGr se milte hain — humne ye poori list
-// pehle hi verify ki thi (61 characters, sab keys). Ye hamesha "haan"
-// bolne ki purani bhool se bachne ke liye ab exact check karta hai.
 const KRUTI_REACHABLE_CHARS = (() => {
   const set = new Set<string>();
   for (const base of Object.values(CODE_TO_BASE_KEY)) {
@@ -63,15 +56,28 @@ export interface PreparedCustomText {
   paragraph: string;
   skippedCount: number;
   totalWords: number;
+  wasConverted: boolean;
 }
 
+// targetMode = jo mode USER NE KHUD select kiya hai (Mangal ya Krutidev
+// button dabakar) — ye kabhi nahi badalta. Hum sirf paste kiye gaye
+// text ko, zaroorat padne par, USI mode ke format mein convert karte hain.
 export function prepareCustomParagraph(
   text: string,
-  mode: "mangal" | "krutidev"
+  targetMode: "mangal" | "krutidev"
 ): PreparedCustomText {
-  const words = text.split(/\s+/).filter(Boolean);
-  const isTypeable = mode === "krutidev" ? isKrutiWordTypeable : isMangalWordTypeable;
+  const pastedFormat = detectHindiFormat(text);
+  const wasConverted = pastedFormat !== targetMode;
 
+  let finalText = text;
+  if (targetMode === "krutidev" && pastedFormat === "mangal") {
+    finalText = uni2kru(text);
+  } else if (targetMode === "mangal" && pastedFormat === "krutidev") {
+    finalText = kru2uni(text);
+  }
+
+  const isTypeable = targetMode === "krutidev" ? isKrutiWordTypeable : isMangalWordTypeable;
+  const words = finalText.split(/\s+/).filter(Boolean);
   const kept: string[] = [];
   let skipped = 0;
   for (const w of words) {
@@ -79,5 +85,10 @@ export function prepareCustomParagraph(
     else skipped++;
   }
 
-  return { paragraph: kept.join(" "), skippedCount: skipped, totalWords: words.length };
+  return {
+    paragraph: kept.join(" "),
+    skippedCount: skipped,
+    totalWords: words.length,
+    wasConverted,
+  };
 }

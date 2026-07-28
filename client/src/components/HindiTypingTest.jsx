@@ -5,7 +5,7 @@ import { toKrutiSpans } from "../engine/krutiSpans";
 import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
-import { detectHindiFormat, prepareCustomParagraph } from "../engine/customText";
+import { prepareCustomParagraph } from "../engine/customText";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
@@ -134,14 +134,10 @@ export default function HindiTypingTest() {
   };
 
   const handleStartCustom = () => {
-    const detectedMode = detectHindiFormat(customText);
-    const { paragraph, skippedCount } = prepareCustomParagraph(customText, detectedMode);
+    const { paragraph, skippedCount } = prepareCustomParagraph(customText, mode);
 
     if (!paragraph) return;
 
-    if (detectedMode !== mode) {
-      setMode(detectedMode);
-    }
     setCustomNotice(
       skippedCount > 0
         ? `${skippedCount} शब्द अभी छोड़ दिए गए हैं — जल्द ही सपोर्ट होंगे 🙂`
@@ -391,10 +387,7 @@ export default function HindiTypingTest() {
             <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
           </div>
 
-          {/* Glassy paragraph box — only ~2 lines visible; the rest
-              scrolls smoothly as you type, keeping the active word near
-              the top so it fits comfortably alongside the virtual
-              keyboard on smaller screens. */}
+          {/* Glassy paragraph box */}
           <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-xl">
             <div
               className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
