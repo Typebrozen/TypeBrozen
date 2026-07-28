@@ -13,6 +13,11 @@ errorSound.volume = 0.12;
 finishSound.volume = 0.2;
 
 const WORD_COUNT = 200;
+// When fewer than this many unused words remain ahead of the current
+// position, fetch another batch in the background so the test never
+// runs out of words mid-typing (was causing the timer to keep running
+// with no result screen once the initial 200 words were used up).
+const REFILL_THRESHOLD = 30;
 
 export default function useTypingTest(mode = 'time', customWords = [], duration = 60) {
   const [words, setWords] = useState([]);
@@ -49,6 +54,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
   const lastWpmUpdateRef = useRef(0);
   const isFinishingRef = useRef(false);
   const wpmHistoryRef = useRef([]);
+  const isFetchingMoreRef = useRef(false);
 
   correctWordsRef.current = correctWords;
   incorrectWordsRef.current = incorrectWords;
@@ -58,7 +64,6 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     setTimeLeft(duration);
   }, [duration]);
 
-  // Net WPM = correctWords per minute - errorWords per minute
   const calcNetWpm = useCallback((elapsedMs) => {
     const minutes = Math.max(elapsedMs / 60000, 1 / 60000);
     const grossWpm = (correctWordsRef.current + incorrectWordsRef.current) / minutes;
@@ -128,6 +133,29 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
   }, [mode]);
 
   useEffect(() => { loadWords(); }, [loadWords]);
+
+  // Fetch another batch of words in the background and append it to the
+  // existing list — used so timed tests never run out of words no matter
+  // how long the selected duration is.
+  const ensureMoreWords = useCallback(async (totalWordCount, currentIndex) => {
+    if (mode === 'custom') return;
+    if (totalWordCount - currentIndex > REFILL_THRESHOLD) return;
+    if (isFetchingMoreRef.current) return;
+
+    isFetchingMoreRef.current = true;
+    try {
+      const res = await fetch(`/api/words?count=${WORD_COUNT}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWords(prev => [...prev, ...data.words]);
+      }
+    } catch {
+      // Silent failure is fine — we'll just retry on the next word
+      // commit since the buffer threshold check will fire again.
+    } finally {
+      isFetchingMoreRef.current = false;
+    }
+  }, [mode]);
 
   // TIMER
   useEffect(() => {
@@ -199,12 +227,10 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
 
     const currentWord = activeWords[wordIndex] ?? '';
 
-    // Space — move to next word
     if (value.endsWith(' ')) {
       const typedWord = value.trim();
       const isCorrect = typedWord === currentWord;
 
-      // Update word status
       setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
 
       if (isCorrect) {
@@ -221,7 +247,6 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
         errorSound.play().catch(() => {});
         setIncorrectWords(c => c + 1);
         setCurrentStreak(0);
-        // Track which keys were wrong
         typedWord.split('').forEach((char, i) => {
           if (char !== currentWord[i]) trackKeyError(char);
         });
@@ -234,11 +259,12 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
 
       if (mode === 'custom' && nextIndex >= activeWords.length) {
         finishTest();
+      } else if (mode !== 'custom') {
+        ensureMoreWords(activeWords.length, nextIndex);
       }
       return;
     }
 
-    // Normal typing — sound feedback
     if (value.length > input.length) {
       const newChar = value[value.length - 1];
       const charIndex = value.length - 1;
@@ -254,7 +280,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     }
 
     setInput(value);
-  }, [finished, activeWords, wordIndex, input, started, finishTest, mode, trackKeyError]);
+  }, [finished, activeWords, wordIndex, input, started, finishTest, mode, trackKeyError, ensureMoreWords]);
 
   const getCharStatus = useCallback((wIndex, charIndex) => {
     const word = activeWords[wIndex];
