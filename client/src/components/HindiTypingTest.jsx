@@ -10,6 +10,7 @@ import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
+import ExamMode from "./ExamMode";
 
 import keySoundFile from '../assets/key.mp3';
 import errorSoundFile from '../assets/error.mp3';
@@ -28,7 +29,13 @@ const IGNORED_KEYS = new Set([
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
 ]);
 
-const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10];
+const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10, 15];
+
+const TIME_EXAM_LABELS = {
+  10: "SSC / Railway / Court",
+  15: "CPCT",
+};
+
 const DEFAULT_MINUTES = 1;
 const MIN_WORDS = 70;
 
@@ -59,6 +66,7 @@ function encouragement(cpm) {
 
 export default function HindiTypingTest() {
   const [mode, setMode] = useState("mangal"); // "mangal" | "krutidev"
+  const [showExam, setShowExam] = useState(false);
   const [testMode, setTestMode] = useState("time"); // "time" | "custom"
   const [selectedTime, setSelectedTime] = useState(DEFAULT_MINUTES * 60);
   const [customText, setCustomText] = useState("");
@@ -71,9 +79,6 @@ export default function HindiTypingTest() {
   const [now, setNow] = useState(() => Date.now());
   const activeWordRef = useRef(null);
 
-  // Refs so handleKeyDown (whose effect doesn't re-run every keystroke)
-  // can always read the latest typed text / active word for sound checks,
-  // without needing to re-attach the keydown listener on every render.
   const typedTrackRef = useRef(state.typed);
   const currentWordRef = useRef(state.words[state.wordIndex] ?? "");
   useEffect(() => {
@@ -81,8 +86,6 @@ export default function HindiTypingTest() {
     currentWordRef.current = state.words[state.wordIndex] ?? "";
   }, [state.typed, state.wordIndex, state.words]);
 
-  // Play a finish chime exactly once, right when the test transitions
-  // from in-progress to finished.
   const prevFinishedRef = useRef(state.finished);
   useEffect(() => {
     if (state.finished && !prevFinishedRef.current) {
@@ -92,10 +95,6 @@ export default function HindiTypingTest() {
     prevFinishedRef.current = state.finished;
   }, [state.finished]);
 
-  // Jab bhi current word badle, us word ko view mein rakho — box khud
-  // upar scroll ho jayega, poora paragraph screen pe kabhi nahi phailega.
-  // "start" (instead of "center") keeps the current line near the top
-  // of the 2-line window, so the next line is always visible below it.
   useEffect(() => {
     activeWordRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [state.wordIndex]);
@@ -178,9 +177,6 @@ export default function HindiTypingTest() {
       const resolvedKey = resolvePhysicalKey(e);
       if (!resolvedKey) return;
 
-      // Resolve which Hindi character this keystroke produces, based on
-      // mode (Mangal/Krutidev) and whether Alt is held (nukta / extended
-      // Krutidev characters).
       let charToAppend = null;
 
       if (mode === "krutidev" && e.altKey) {
@@ -197,8 +193,6 @@ export default function HindiTypingTest() {
 
       if (!charToAppend) return;
 
-      // Typing sound feedback — compare against the next expected
-      // character in the active word.
       const expectedChar = currentWordRef.current[typedTrackRef.current.length];
       if (charToAppend === expectedChar) {
         keySound.currentTime = 0;
@@ -232,6 +226,10 @@ export default function HindiTypingTest() {
       ? "'Kruti Dev 010', sans-serif"
       : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
+  if (showExam) {
+    return <ExamMode onExit={() => setShowExam(false)} />;
+  }
+
   // ── RESULTS SCREEN ──
   if (state.finished) {
     const stats = computeStats(state, elapsedMs);
@@ -242,6 +240,7 @@ export default function HindiTypingTest() {
           <p className="text-xs uppercase tracking-widest mt-2 text-white/50">Characters Per Minute</p>
         </div>
 
+        {/* Primary Stats */}
         <div className="flex gap-6 flex-wrap justify-center">
           <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
             <p className="text-4xl font-bold text-white">{stats.wpm}</p>
@@ -258,6 +257,27 @@ export default function HindiTypingTest() {
           <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
             <p className="text-4xl font-bold text-red-400">{stats.incorrectWords}</p>
             <p className="text-xs uppercase text-white/50 mt-1">Wrong Words</p>
+          </div>
+        </div>
+
+        {/* Exam Specific Stats */}
+        <div className="w-full max-w-2xl p-4 rounded-2xl border border-white/10 bg-white/5">
+          <p className="text-xs text-center text-white/40 mb-3 uppercase tracking-wider">
+            असली परीक्षा जैसा स्कोर
+          </p>
+          <div className="flex gap-4 flex-wrap justify-center">
+            <div className="text-center min-w-[100px]">
+              <p className="text-2xl font-bold text-white">{stats.grossWpm}</p>
+              <p className="text-[10px] text-white/40 mt-0.5">Gross WPM</p>
+            </div>
+            <div className="text-center min-w-[100px]">
+              <p className="text-2xl font-bold text-blue-400">{stats.netWpmSSC}</p>
+              <p className="text-[10px] text-white/40 mt-0.5">Net WPM (SSC/CPCT)</p>
+            </div>
+            <div className="text-center min-w-[100px]">
+              <p className="text-2xl font-bold text-purple-400">{stats.netWpmRSMSSB}</p>
+              <p className="text-[10px] text-white/40 mt-0.5">Net WPM (RSMSSB)</p>
+            </div>
           </div>
         </div>
 
@@ -319,7 +339,7 @@ export default function HindiTypingTest() {
         </button>
       </div>
 
-      {/* Time vs Custom */}
+      {/* Time vs Custom vs Exam */}
       <div className="flex justify-center gap-2">
         <button
           onClick={() => handleModeToggle("time")}
@@ -336,6 +356,12 @@ export default function HindiTypingTest() {
           }`}
         >
           Custom
+        </button>
+        <button
+          onClick={() => setShowExam(true)}
+          className="px-4 py-1.5 rounded-lg text-sm transition-all bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 text-white"
+        >
+          Exam
         </button>
       </div>
 
@@ -363,20 +389,23 @@ export default function HindiTypingTest() {
 
       {showTypingArea && (
         <>
-          {/* Time selector — sirf "time" mode mein dikhega */}
+          {/* Time selector */}
           {testMode === "time" && (
             <div className="flex justify-center gap-2 flex-wrap">
               {TIME_OPTIONS_MIN.map((min) => (
                 <button
                   key={min}
                   onClick={() => handleSelectTime(min)}
-                  className={`px-3 py-1 rounded-lg text-xs transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs transition-all flex flex-col items-center ${
                     selectedTime === min * 60
                       ? "bg-white/20 text-white"
                       : "bg-white/5 border border-white/10 text-white/60"
                   }`}
                 >
-                  {min} min
+                  <span>{min} min</span>
+                  {TIME_EXAM_LABELS[min] && (
+                    <span className="text-[9px] opacity-70">{TIME_EXAM_LABELS[min]}</span>
+                  )}
                 </button>
               ))}
             </div>

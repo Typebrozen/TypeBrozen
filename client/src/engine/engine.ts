@@ -1,13 +1,5 @@
 // ======================================================
 // Typing Engine — pure functions, no React, no classes.
-// Each function takes a state and returns a NEW state.
-// Call pattern from the component is always:
-//   setState(prev => appendChar(prev, char))
-//
-// Mangal needs no composition/buffering logic: Unicode
-// already stores characters in typing order (क then ि),
-// the font's shaping engine handles the visual reordering
-// on its own. So "typed" is just a plain growing string.
 // ======================================================
 
 import { EngineState, Stats } from "./types";
@@ -22,12 +14,13 @@ export function createInitialState(paragraph: string, durationMs: number = 60000
     finished: false,
     startTime: null,
     durationMs,
+    totalCharsTyped: 0,
+    totalErrors: 0,
   };
 }
 
 export function appendChar(state: EngineState, char: string): EngineState {
   if (state.finished) return state;
-  // Timer starts on the FIRST keystroke, not on page load.
   const startTime = state.startTime ?? Date.now();
   return { ...state, typed: state.typed + char, startTime };
 }
@@ -42,7 +35,17 @@ export function commitWord(state: EngineState): EngineState {
   if (state.finished) return state;
 
   const target = state.words[state.wordIndex];
-  const isCorrect = target === state.typed;
+  const typed = state.typed;
+  const isCorrect = target === typed;
+
+  // Character-level error count — jitni bhi positions pe typed/target
+  // match nahi karte, ya extra/missing characters hain, wo sab "error"
+  // ginte hain. Ye asli exam-style formulas ke liye zaroori data hai.
+  let charErrors = 0;
+  const maxLen = Math.max(target.length, typed.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (typed[i] !== target[i]) charErrors++;
+  }
 
   const wordResults = [...state.wordResults];
   wordResults[state.wordIndex] = isCorrect ? "correct" : "incorrect";
@@ -50,13 +53,17 @@ export function commitWord(state: EngineState): EngineState {
   const wordIndex = state.wordIndex + 1;
   const finished = wordIndex >= state.words.length;
 
-  return { ...state, wordResults, wordIndex, typed: "", finished };
+  return {
+    ...state,
+    wordResults,
+    wordIndex,
+    typed: "",
+    finished,
+    totalCharsTyped: state.totalCharsTyped + typed.length + 1, // +1 space keystroke
+    totalErrors: state.totalErrors + charErrors,
+  };
 }
 
-// Called periodically (not from a keystroke) to check whether the
-// selected duration has run out. Returns the SAME state object when
-// nothing changed, so React won't re-render on every harmless tick —
-// only when the test actually needs to end.
 export function checkTimeout(state: EngineState, now: number): EngineState {
   if (state.finished || state.startTime === null) return state;
   if (now - state.startTime >= state.durationMs) {
@@ -65,8 +72,6 @@ export function checkTimeout(state: EngineState, now: number): EngineState {
   return state;
 }
 
-// Only CORRECT words count toward CPM/WPM — standard typing-test
-// convention, and matches CPCT/SSC scoring expectations.
 export function computeStats(state: EngineState, elapsedMs: number): Stats {
   let correctWords = 0;
   let incorrectWords = 0;
@@ -76,7 +81,7 @@ export function computeStats(state: EngineState, elapsedMs: number): Stats {
     const result = state.wordResults[idx];
     if (result === "correct") {
       correctWords++;
-      correctChars += word.length + 1; // +1 for the space after the word
+      correctChars += word.length + 1;
     } else if (result === "incorrect") {
       incorrectWords++;
     }
@@ -89,5 +94,19 @@ export function computeStats(state: EngineState, elapsedMs: number): Stats {
   const totalJudged = correctWords + incorrectWords;
   const accuracy = totalJudged === 0 ? 100 : Math.round((correctWords / totalJudged) * 100);
 
-  return { cpm, wpm, accuracy, correctWords, incorrectWords };
+  // ── Exam-style scoring formulas ──
+  // Gross WPM: saari typed characters, bina errors ghataye
+  const grossWpm =
+    elapsedMin > 0 ? Math.round(state.totalCharsTyped / 5 / elapsedMin) : 0;
+
+  // CPCT/SSC/High Court method: (Total Characters - Errors) / 5 / Time
+  const netWpmSSC =
+    elapsedMin > 0
+      ? Math.max(0, Math.round((state.totalCharsTyped - state.totalErrors) / 5 / elapsedMin))
+      : 0;
+
+  // RSMSSB method: Gross WPM - Full Mistakes (galat words ki ginti)
+  const netWpmRSMSSB = Math.max(0, grossWpm - incorrectWords);
+
+  return { cpm, wpm, accuracy, correctWords, incorrectWords, grossWpm, netWpmSSC, netWpmRSMSSB };
 }
