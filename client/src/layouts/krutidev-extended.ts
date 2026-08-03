@@ -4,6 +4,9 @@
 // hum inhe apne engine mein ek free AltGr combo pe rakh rahe hain —
 // bilkul waise hi jaise humne Mangal ke ढ़ letter ke liye kiya tha.
 export const KRUTI_EXTENDED_KEYMAP: Record<string, string> = {
-    u: "Å",
-    y: "ª",
-  };
+  u: "Å",
+  y: "ª",
+  i: "¡",
+  c: "ç",
+  k: "Ø",
+};
