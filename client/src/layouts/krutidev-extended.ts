@@ -9,4 +9,5 @@ export const KRUTI_EXTENDED_KEYMAP: Record<string, string> = {
   i: "¡",
   c: "ç",
   k: "Ø",
+  o: "‚",
 };
