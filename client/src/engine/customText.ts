@@ -4,14 +4,21 @@
 // User jo mode select kare, wahi rahega — hum sirf text ko
 // zaroorat padne par convert karte hain, mode kabhi khud
 // nahi badalte.
+//
+// NOTE: Krutidev ke "typeable" check ab naye Alt+numpad system
+// (krutidev-altcodes.ts, 46 characters) se hota hai — purana
+// AltGr+letter wala KRUTI_EXTENDED_KEYMAP (sirf ~13 characters)
+// yahan se hata diya gaya hai, kyunki asli typing ab us se nahi
+// balki Alt+numpad se hoti hai. Ye sync mismatch hi custom-text
+// words ke galat "untypeable" maan kar skip hone ki wajah thi.
 // ======================================================
 
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
-import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { CODE_TO_BASE_KEY, SHIFT_SYMBOL } from "./physicalKey";
 import { getNextKeyInfo } from "./nextKey";
 import { kru2uni } from "./kru2uni";
 import { uni2kru } from "./uni2kru";
+import { CHAR_TO_ALT_CODE } from "./krutidev-altcodes";
 
 const DEVANAGARI_RANGE = /[\u0900-\u097F]/;
 
@@ -27,7 +34,12 @@ function isMangalWordTypeable(word: string): boolean {
     if (guard > 50) return false;
     const hint = getNextKeyInfo(word.slice(typed.length));
     if (!hint) return false;
-    const appended = hint.altGr ? NUKTA_KEYMAP[hint.label] : MANGAL_KEYMAP[hint.label];
+    
+    // Updated line to fix TypeScript index signature warning
+    const appended = hint.altGr
+      ? (NUKTA_KEYMAP as Record<string, string>)[hint.label]
+      : (MANGAL_KEYMAP as Record<string, string>)[hint.label];
+      
     if (appended === undefined) return false;
     typed += appended;
   }
@@ -41,7 +53,8 @@ const KRUTI_REACHABLE_CHARS = (() => {
     if (/^[a-z]$/.test(base)) set.add(base.toUpperCase());
     if (SHIFT_SYMBOL[base]) set.add(SHIFT_SYMBOL[base]);
   }
-  for (const ch of Object.values(KRUTI_EXTENDED_KEYMAP)) set.add(ch);
+  // every character reachable via a real Alt+numpad sequence
+  for (const ch of Object.keys(CHAR_TO_ALT_CODE)) set.add(ch);
   return set;
 })();
 

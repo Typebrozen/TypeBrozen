@@ -23,6 +23,7 @@ export default function MultiplayerRace({
   const [correctChars, setCorrectChars] = useState(0);
   const [incorrectChars, setIncorrectChars] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [finishStats, setFinishStats] = useState(null); // 🔒 frozen result, set ONCE when player finishes
   const [startTime, setStartTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
   const [wordStatuses, setWordStatuses] = useState({});
@@ -70,14 +71,18 @@ export default function MultiplayerRace({
   };
 
   // Calculate Net WPM (Typing Master style)
-  const calcStats = useCallback(() => {
-    const elapsed = startTime ? (Date.now() - startTime) / 1000 / 60 : 0;
+  // 🔒 Pass an endTime to FREEZE the calculation at that exact moment.
+  // Without it, this recalculates using "right now" every time it's called,
+  // which is why results used to keep changing while waiting for others.
+  const calcStats = useCallback((endTime) => {
+    const now = endTime ?? Date.now();
+    const elapsed = startTime ? (now - startTime) / 1000 / 60 : 0;
     if (elapsed === 0) return { wpm: 0, accuracy: 100, grossWpm: 0, errors: 0 };
-    const grossWpm = Math.round((correctWordsRef.current + incorrectWordsRef.current));
+    const grossWords = correctWordsRef.current + incorrectWordsRef.current;
+    const grossWpm = Math.round(grossWords / elapsed);
     const errors = incorrectWordsRef.current;
     const netWpm = Math.max(0, Math.round((correctWordsRef.current / elapsed) - (errors / elapsed)));
-    const totalWords2 = correctWordsRef.current + incorrectWordsRef.current;
-    const accuracy = totalWords2 === 0 ? 100 : Math.round((correctWordsRef.current / totalWords2) * 100);
+    const accuracy = grossWords === 0 ? 100 : Math.round((correctWordsRef.current / grossWords) * 100);
     return { wpm: netWpm, grossWpm, errors, accuracy };
   }, [startTime]);
 
@@ -101,26 +106,31 @@ export default function MultiplayerRace({
     return () => clearInterval(timerRef.current);
   }, [raceStarted, timeLimit]);
 
-  // Auto finish when time runs out
+  // Auto finish when time runs out — locks the box instantly, freezes the score
   useEffect(() => {
     if (timeLeft === 0 && raceStarted && !finished) {
       clearInterval(progressIntervalRef.current);
-      setFinished(true);
-      const { wpm, accuracy } = calcStats();
+      clearInterval(timerRef.current);
+      const now = Date.now();
+      const stats = calcStats(now);
+      setFinishStats(stats);
+      setFinished(true); // this instantly disables the typing box (see disabled={finished || !raceStarted} below)
       finishSound.currentTime = 0;
       finishSound.play().catch(() => {});
-      sendFinished(wpm, accuracy);
+      // completed:false because the paragraph was NOT fully typed — timer ran out first
+      sendFinished(stats.wpm, stats.accuracy, now, false);
     }
   }, [timeLeft, raceStarted, finished, calcStats, sendFinished]);
 
-  // Send progress every second
+  // Send progress update every 2.5s instead of every 1s — much lighter on your server,
+  // and the leaderboard bar doesn't need second-by-second precision.
   useEffect(() => {
     if (!raceStarted || finished) return;
     progressIntervalRef.current = setInterval(() => {
       const { wpm, accuracy } = calcStats();
       const progress = Math.round((wordIndex / totalWords) * 100);
       sendProgress(progress, wpm, accuracy);
-    }, 1000);
+    }, 2500);
     return () => clearInterval(progressIntervalRef.current);
   }, [raceStarted, finished, wordIndex, totalWords, sendProgress, calcStats]);
 
@@ -159,16 +169,18 @@ export default function MultiplayerRace({
       setInput('');
       setWordIndex(nextIndex);
 
+      // Reached the end of the paragraph — lock instantly, freeze the score right here
       if (nextIndex >= totalWords) {
         clearInterval(progressIntervalRef.current);
         clearInterval(timerRef.current);
+        const now = Date.now();
+        const stats = calcStats(now);
+        setFinishStats(stats);
         setFinished(true);
         finishSound.currentTime = 0;
         finishSound.play().catch(() => {});
-        setTimeout(() => {
-          const { wpm, accuracy } = calcStats();
-          sendFinished(wpm, accuracy);
-        }, 50);
+        // completed:true because the whole paragraph was typed
+        sendFinished(stats.wpm, stats.accuracy, now, true);
       }
       return;
     }
@@ -207,10 +219,26 @@ export default function MultiplayerRace({
     ? [...roomState.players].sort((a, b) => (b.progress || 0) - (a.progress || 0))
     : [];
 
+  // 🏆 Everyone's browser computes the SAME final ranking from the SAME data —
+  // no need for the server to "decide" who won.
+  // Rule: fully typed the paragraph > ran out of time.
+  //       Among those who finished the paragraph: earliest finishTime wins.
+  //       Among those who ran out of time: higher net WPM wins, accuracy breaks ties.
+  const getRanking = (players) => {
+    return [...(players || [])].sort((a, b) => {
+      if (a.completed && !b.completed) return -1;
+      if (!a.completed && b.completed) return 1;
+      if (a.completed && b.completed) return (a.finishTime || 0) - (b.finishTime || 0);
+      if ((b.wpm || 0) !== (a.wpm || 0)) return (b.wpm || 0) - (a.wpm || 0);
+      return (b.accuracy || 0) - (a.accuracy || 0);
+    });
+  };
+
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
   const timerColor = timeLeft > 30 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400 animate-pulse';
 
-  // Live stats
+  // Live stats — only used WHILE actively typing. Once finished, we always show
+  // the frozen finishStats instead, never a re-calculated live value.
   const { wpm: liveWpm, accuracy: liveAccuracy } = calcStats();
 
   // ── COUNTDOWN ──
@@ -226,15 +254,7 @@ export default function MultiplayerRace({
 
   // ── RESULTS ──
   if (raceFinished && roomState) {
-    const sorted = [...roomState.players].sort((a, b) => {
-      // Finished players ranked by finish time first
-      if (a.finished && b.finished) return (a.finishTime || 0) - (b.finishTime || 0);
-      if (a.finished) return -1;
-      if (b.finished) return 1;
-      // Not finished: rank by WPM then accuracy
-      if (b.wpm !== a.wpm) return (b.wpm || 0) - (a.wpm || 0);
-      return (b.accuracy || 0) - (a.accuracy || 0);
-    });
+    const sorted = getRanking(roomState.players);
 
     const isHost = roomState.hostId === myId;
     const myPosition = sorted.findIndex(p => p.id === myId) + 1;
@@ -293,7 +313,7 @@ export default function MultiplayerRace({
                 {player.accuracy || 0}%
               </div>
               <div className="col-span-3 text-center">
-                {player.finished
+                {player.completed
                   ? <span className="text-green-400 text-xs font-bold">✓ Finished</span>
                   : <span className="text-red-400 text-xs">{Math.round(player.progress || 0)}% done</span>
                 }
@@ -334,12 +354,12 @@ export default function MultiplayerRace({
         </div>
         <div className="flex gap-4 sm:gap-6">
           <div className="text-center">
-            <p className={`text-xl sm:text-2xl font-bold ${textColor}`}>{liveWpm}</p>
+            <p className={`text-xl sm:text-2xl font-bold ${textColor}`}>{finished ? (finishStats?.wpm ?? 0) : liveWpm}</p>
             <p className={`text-xs uppercase ${mutedColor}`}>WPM</p>
           </div>
           <div className="text-center">
-            <p className={`text-xl sm:text-2xl font-bold ${liveAccuracy < 80 ? 'text-red-400' : liveAccuracy < 95 ? 'text-yellow-400' : 'text-green-400'}`}>
-              {liveAccuracy}%
+            <p className={`text-xl sm:text-2xl font-bold ${(finished ? finishStats?.accuracy ?? 0 : liveAccuracy) < 80 ? 'text-red-400' : (finished ? finishStats?.accuracy ?? 0 : liveAccuracy) < 95 ? 'text-yellow-400' : 'text-green-400'}`}>
+              {finished ? (finishStats?.accuracy ?? 0) : liveAccuracy}%
             </p>
             <p className={`text-xs uppercase ${mutedColor}`}>ACC</p>
           </div>
@@ -368,7 +388,7 @@ export default function MultiplayerRace({
                 />
               </div>
               <span className={`text-xs w-8 text-right ${mutedColor}`}>
-                {player.finished ? '✓' : `${Math.round(player.progress || 0)}%`}
+                {player.completed ? '✓' : `${Math.round(player.progress || 0)}%`}
               </span>
               <span className={`text-xs w-12 text-right font-mono ${player.id === myId ? 'text-yellow-400' : mutedColor}`}>
                 {player.wpm > 0 ? `${player.wpm}w` : ''}
@@ -441,11 +461,11 @@ export default function MultiplayerRace({
           <p className={`text-sm ${mutedColor}`}>Waiting for other players...</p>
           <div className="flex justify-center gap-8 mt-3">
             <div>
-              <p className={`text-xl font-bold text-yellow-400`}>{liveWpm}</p>
+              <p className={`text-xl font-bold text-yellow-400`}>{finishStats?.wpm ?? 0}</p>
               <p className={`text-xs ${mutedColor}`}>Net WPM</p>
             </div>
             <div>
-              <p className={`text-xl font-bold text-green-400`}>{liveAccuracy}%</p>
+              <p className={`text-xl font-bold text-green-400`}>{finishStats?.accuracy ?? 0}%</p>
               <p className={`text-xs ${mutedColor}`}>Accuracy</p>
             </div>
           </div>

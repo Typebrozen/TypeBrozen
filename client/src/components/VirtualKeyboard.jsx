@@ -1,6 +1,5 @@
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
-import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 
 const UNIT = 42;
 const GAP = 6;
@@ -76,8 +75,14 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
     return MANGAL_KEYMAP[label] ?? "";
   }
 
+  // Krutidev special characters (Alt+numpad) don't correspond to any
+  // single letter key on this layout anymore, so we highlight both Alt
+  // keys generically and show the exact digit sequence above the board.
+  const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
+  const altCodeSequence = showAltCodeBanner ? "0" + nextKey.altCode : null;
+
   return (
-    <div className="rounded-2xl p-5 border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950">
+    <div className="rounded-2xl p-5 border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950 overflow-x-hidden">
       <div className="flex flex-col gap-1.5 items-center">
         {ROWS.map((row, rIdx) => (
           <div key={rIdx} className="flex gap-1.5">
@@ -88,11 +93,14 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               if (FUNCTION_KEYS.has(code)) {
                 const isShiftHighlight =
                   nextKey?.shift && !nextKey?.altGr && (code === "ShiftLeft" || code === "ShiftRight");
-                // AltGr guidance ke waqt hum Right Alt ko highlight karte hain,
-                // kyunki asli AltGr keyboards pe wahi key hoti hai.
-                const isAltGrHighlight = nextKey?.altGr && code === "AltRight";
+                // Mangal nukta guidance highlights Right Alt (real AltGr key).
+                const isAltGrHighlight = mode === "mangal" && nextKey?.altGr && code === "AltRight";
+                // Krutidev Alt+numpad guidance highlights BOTH Alt keys,
+                // since there's no fixed side and no numpad drawn here.
+                const isAltCodeHighlight =
+                  showAltCodeBanner && (code === "AltLeft" || code === "AltRight");
                 const isSpaceHighlight = code === "Space" && nextKey?.label === " ";
-                const active = isShiftHighlight || isAltGrHighlight || isSpaceHighlight;
+                const active = isShiftHighlight || isAltGrHighlight || isAltCodeHighlight || isSpaceHighlight;
 
                 return (
                   <div
@@ -115,13 +123,16 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               const shiftLabel = getShiftedLabel(base);
               const baseGlyph = glyphFor(base);
               const shiftGlyph = glyphFor(shiftLabel);
-              // Nukta / Extended character lookup according to layout mode
-              const nuktaGlyph =
-                mode === "mangal" ? NUKTA_KEYMAP[base] : mode === "krutidev" ? KRUTI_EXTENDED_KEYMAP[base] : null;
+              // Nukta lookup only applies to Mangal mode now — Krutidev's
+              // special characters go through Alt+numpad, not a per-letter
+              // AltGr map, so there's nothing to show here for it anymore.
+              const nuktaGlyph = mode === "mangal" ? NUKTA_KEYMAP[base] : null;
 
-              const isActiveBase = nextKey && !nextKey.shift && !nextKey.altGr && nextKey.label === base;
-              const isActiveShift = nextKey && nextKey.shift && !nextKey.altGr && nextKey.label === shiftLabel;
-              const isActiveAltGr = nextKey && nextKey.altGr && nextKey.label === base;
+              const isActiveBase =
+                nextKey && !nextKey.shift && !nextKey.altGr && nextKey.altCode === undefined && nextKey.label === base;
+              const isActiveShift =
+                nextKey && nextKey.shift && !nextKey.altGr && nextKey.label === shiftLabel;
+              const isActiveAltGr = mode === "mangal" && nextKey && nextKey.altGr && nextKey.label === base;
               const active = isActiveBase || isActiveShift || isActiveAltGr;
 
               return (

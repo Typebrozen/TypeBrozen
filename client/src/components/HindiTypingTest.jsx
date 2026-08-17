@@ -7,7 +7,6 @@ import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { prepareCustomParagraph } from "../engine/customText";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
-import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 import ExamMode from "./ExamMode";
@@ -79,6 +78,13 @@ export default function HindiTypingTest() {
   const [now, setNow] = useState(() => Date.now());
   const activeWordRef = useRef(null);
 
+  // Invisible, always-focused text box. This is the key piece that makes
+  // real Alt+Numpad work: Windows resolves Alt+0184 into the actual
+  // character itself and inserts it wherever text focus currently is —
+  // we can't replicate that resolution in JS, we just need something
+  // focused to receive it, then read it out and clear it immediately.
+  const hiddenInputRef = useRef(null);
+
   const typedTrackRef = useRef(state.typed);
   const currentWordRef = useRef(state.words[state.wordIndex] ?? "");
   useEffect(() => {
@@ -98,6 +104,28 @@ export default function HindiTypingTest() {
   useEffect(() => {
     activeWordRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [state.wordIndex]);
+
+  // Keeps the hidden input focused during actual Krutidev typing, so the
+  // OS always has somewhere to deliver an Alt+Numpad character. Deliberately
+  // narrow: no window-wide listeners, no repeating timer — those were
+  // stealing focus from the custom-text paste textarea. This only runs
+  // once when the typing screen itself becomes visible.
+  const showTypingArea = testMode !== "custom" || customReady;
+  useEffect(() => {
+    if (mode === "krutidev" && showTypingArea) {
+      hiddenInputRef.current?.focus();
+    }
+  }, [mode, showTypingArea]);
+
+  // Re-focuses the hidden input if the user clicks inside the typing
+  // area itself (e.g. after accidentally clicking elsewhere on it) —
+  // scoped to a single element via onClick below, never global.
+  function refocusHiddenInput() {
+    if (mode === "krutidev" && showTypingArea) {
+      hiddenInputRef.current?.focus();
+    }
+  }
+
 
   const reset = useCallback(
     (durationSeconds = selectedTime, activeMode = mode) => {
@@ -149,9 +177,29 @@ export default function HindiTypingTest() {
 
   // Keyboard input
   useEffect(() => {
+    function playSoundFor(charToAppend) {
+      const expectedChar = currentWordRef.current[typedTrackRef.current.length];
+      if (charToAppend === expectedChar) {
+        keySound.currentTime = 0;
+        keySound.play().catch(() => {});
+      } else {
+        errorSound.currentTime = 0;
+        errorSound.play().catch(() => {});
+      }
+    }
+
     function handleKeyDown(e) {
       if (state.finished) return;
       if (testMode === "custom" && !customReady) return;
+
+      // Alt + a Numpad digit: this is a real Alt+Numpad sequence in
+      // progress. We must NOT preventDefault or otherwise intercept
+      // it — doing so stops Windows from ever resolving it into a
+      // character. Just let it through to the hidden input.
+      if (mode === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
+        return;
+      }
+
       if (IGNORED_KEYS.has(e.key)) return;
 
       e.preventDefault();
@@ -179,10 +227,10 @@ export default function HindiTypingTest() {
 
       let charToAppend = null;
 
-      if (mode === "krutidev" && e.altKey) {
-        const base = resolveAltGrKey(e);
-        charToAppend = base ? KRUTI_EXTENDED_KEYMAP[base] : null;
-      } else if (mode === "krutidev") {
+      if (mode === "krutidev") {
+        // Plain Krutidev keys always type their normal glyph, whether or
+        // not Alt happens to be held — the special-character path is
+        // handled separately via the hidden input above.
         charToAppend = resolvedKey;
       } else if (e.altKey) {
         const base = resolveAltGrKey(e);
@@ -193,20 +241,32 @@ export default function HindiTypingTest() {
 
       if (!charToAppend) return;
 
-      const expectedChar = currentWordRef.current[typedTrackRef.current.length];
-      if (charToAppend === expectedChar) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
-      } else {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
-      }
-
+      playSoundFor(charToAppend);
       setState((prev) => appendChar(prev, charToAppend));
     }
 
+    // Fires when Windows has resolved an Alt+Numpad sequence and inserted
+    // the real character into our hidden input. We grab it and clear the
+    // box straight away so it's always empty and ready for the next one.
+    function handleHiddenInput(e) {
+      if (mode !== "krutidev") return;
+      const typedChar = e.target.value;
+      e.target.value = "";
+      if (!typedChar) return;
+      if (state.finished) return;
+      if (testMode === "custom" && !customReady) return;
+
+      playSoundFor(typedChar);
+      setState((prev) => appendChar(prev, typedChar));
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const hiddenInput = hiddenInputRef.current;
+    hiddenInput?.addEventListener("input", handleHiddenInput);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      hiddenInput?.removeEventListener("input", handleHiddenInput);
+    };
   }, [state.finished, mode, testMode, customReady]);
 
   // Timer
@@ -315,10 +375,17 @@ export default function HindiTypingTest() {
   const timeColor =
     remainingSeconds <= 10 ? "text-red-400" : remainingSeconds <= 30 ? "text-yellow-400" : "text-green-400";
 
-  const showTypingArea = testMode !== "custom" || customReady;
-
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8">
+    <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8" onClick={refocusHiddenInput}>
+      {/* Invisible, always-focused input — receives real OS Alt+Numpad
+          characters. Not display:none (that would block focus). */}
+      <input
+        ref={hiddenInputRef}
+        tabIndex={-1}
+        className="fixed opacity-0 pointer-events-none"
+        style={{ top: 0, left: 0, width: 1, height: 1 }}
+      />
+
       {/* Mode selector — Mangal vs Krutidev */}
       <div className="flex justify-center gap-2">
         <button
@@ -338,6 +405,12 @@ export default function HindiTypingTest() {
           Krutidev 010
         </button>
       </div>
+
+      {mode === "krutidev" && (
+        <p className="text-center text-xs text-white/40">
+          विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
+        </p>
+      )}
 
       {/* Time vs Custom vs Exam */}
       <div className="flex justify-center gap-2">
@@ -482,11 +555,22 @@ export default function HindiTypingTest() {
             <p className="text-center text-xs text-white/40">{customNotice}</p>
           )}
 
-          {nextKeyInfo?.altGr && (
-            <div className="text-center p-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10">
-              <p className="text-sm text-yellow-200">
-                ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
-              </p>
+          {((nextKeyInfo?.altGr && mode === "mangal") ||
+            (nextKeyInfo?.altCode !== undefined && mode === "krutidev")) && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
+              <div className="text-center p-3 rounded-xl border border-yellow-500/40 bg-yellow-500/95 shadow-xl backdrop-blur">
+                <p className="text-sm text-black font-medium">
+                  {mode === "mangal" ? (
+                    <>
+                      ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
+                    </>
+                  ) : (
+                    <>
+                      ⚠️ यह विशेष अक्षर है — <strong>Alt दबाकर रखें</strong>, फिर नंबर-पैड पर <strong>0{nextKeyInfo.altCode}</strong> टाइप करें, फिर Alt छोड़ दें
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
           )}
 
