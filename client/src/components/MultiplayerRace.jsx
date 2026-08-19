@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { jsPDF } from 'jspdf';
 import keySoundFile from '../assets/key.mp3';
 import errorSoundFile from '../assets/error.mp3';
 import finishSoundFile from '../assets/finish.mp3';
@@ -27,6 +28,10 @@ export default function MultiplayerRace({
   const [startTime, setStartTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
   const [wordStatuses, setWordStatuses] = useState({});
+  // 📄 Stores every word the player got wrong, along with exactly what they typed instead,
+  // so the PDF report can show letter-by-letter which part was wrong. Only used for
+  // THIS player's own report — never sent to the server or shown to other players.
+  const wrongWordsRef = useRef([]); // [{ correctWord, typedWord }]
 
   const inputRef = useRef(null);
   const containerRef = useRef(null);
@@ -163,6 +168,8 @@ export default function MultiplayerRace({
         errorSound.play().catch(() => {});
         setIncorrectWords(c => c + 1);
         setIncorrectChars(c => c + currentWord.length);
+        // Save exactly what they typed vs. the correct word, for the report
+        wrongWordsRef.current.push({ correctWord: currentWord, typedWord });
       }
 
       const nextIndex = wordIndex + 1;
@@ -234,6 +241,108 @@ export default function MultiplayerRace({
     });
   };
 
+  // Compares the correct word to what the player actually typed, letter by letter.
+  // Returns a list of { char, wrong } so the PDF can color each letter individually.
+  const diffWord = (correctWord, typedWord) => {
+    const maxLen = Math.max(correctWord.length, typedWord.length);
+    const result = [];
+    for (let i = 0; i < maxLen; i++) {
+      const correctChar = correctWord[i];
+      const typedChar = typedWord[i];
+      if (typedChar === undefined) {
+        // player typed fewer letters than the correct word — show the missing letter in red
+        result.push({ char: correctChar, wrong: true });
+      } else if (correctChar === undefined) {
+        // player typed extra letters beyond the correct word — show them in red too
+        result.push({ char: typedChar, wrong: true });
+      } else if (typedChar === correctChar) {
+        result.push({ char: correctChar, wrong: false });
+      } else {
+        result.push({ char: correctChar, wrong: true });
+      }
+    }
+    return result;
+  };
+
+  // 📄 Builds and downloads this player's personal PDF report.
+  // Runs entirely in the browser (jsPDF) — no server call, no server load.
+  const downloadReport = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 20;
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(20, 20, 20);
+    doc.text('Typing Race Report', pageWidth / 2, y, { align: 'center' });
+    y += 12;
+
+    doc.setFontSize(12);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Player: ${myPlayer?.name || 'You'}`, 14, y);
+    y += 8;
+    doc.text(`Rank: ${myPosition ? `${myPosition}${myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : myPosition === 1 ? 'st' : 'th'} Place` : '-'}`, 14, y);
+    y += 8;
+    doc.text(`Net WPM: ${finishStats?.wpm ?? myPlayer?.wpm ?? 0}`, 14, y);
+    y += 8;
+    doc.text(`Accuracy: ${finishStats?.accuracy ?? myPlayer?.accuracy ?? 0}%`, 14, y);
+    y += 12;
+
+    // Wrong words section
+    doc.setFontSize(14);
+    doc.setTextColor(20, 20, 20);
+    doc.text('Words To Practice', 14, y);
+    y += 8;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, y, pageWidth - 14, y);
+    y += 8;
+
+    if (wrongWordsRef.current.length === 0) {
+      doc.setFontSize(12);
+      doc.setTextColor(0, 130, 0);
+      doc.text('No mistakes! Great job.', 14, y);
+      y += 10;
+    } else {
+      doc.setFontSize(12);
+      wrongWordsRef.current.forEach(({ correctWord, typedWord }) => {
+        if (y > 270) { // start a new page if we run out of room
+          doc.addPage();
+          y = 20;
+        }
+        let x = 14;
+        const diffed = diffWord(correctWord, typedWord);
+        diffed.forEach(({ char, wrong }) => {
+          doc.setTextColor(wrong ? 220 : 20, wrong ? 30 : 20, wrong ? 30 : 20);
+          doc.text(char, x, y);
+          x += doc.getTextWidth(char);
+        });
+        // show what they actually typed, in gray, next to it
+        doc.setTextColor(150, 150, 150);
+        doc.text(`   (you typed: ${typedWord})`, x + 2, y);
+        y += 8;
+      });
+
+      // Simple practice tip based on the pattern of mistakes
+      y += 6;
+      if (y > 260) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setTextColor(20, 20, 20);
+      const endMistakes = wrongWordsRef.current.filter(w => {
+        const diffed = diffWord(w.correctWord, w.typedWord);
+        const wrongCount = diffed.filter(d => d.wrong).length;
+        const lastTwoWrong = diffed.slice(-2).some(d => d.wrong);
+        return wrongCount <= 2 && lastTwoWrong;
+      }).length;
+      let tip = 'Slow down slightly and double-check each word before moving to the next.';
+      if (endMistakes >= Math.ceil(wrongWordsRef.current.length / 2)) {
+        tip = 'You often get the last letters of a word wrong — try to fully finish typing each word before your fingers move on.';
+      }
+      doc.text(`Tip: ${tip}`, 14, y, { maxWidth: pageWidth - 28 });
+    }
+
+    doc.save(`${(myPlayer?.name || 'player').replace(/\s+/g, '_')}_race_report.pdf`);
+  };
+
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
   const timerColor = timeLeft > 30 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400 animate-pulse';
 
@@ -283,6 +392,10 @@ export default function MultiplayerRace({
               <p className={`text-xs ${mutedColor}`}>Completed</p>
             </div>
           </div>
+          <button onClick={downloadReport}
+            className="mt-4 mx-auto flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-sm px-5 py-2.5 rounded-lg transition">
+            📄 Download My Report (PDF)
+          </button>
         </div>
 
         {/* All results */}
