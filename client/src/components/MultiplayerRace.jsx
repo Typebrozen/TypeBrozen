@@ -241,6 +241,11 @@ export default function MultiplayerRace({
     });
   };
 
+  // Calculated here (not just inside the results screen further down) so the
+  // Download Report button can also use it without crashing.
+  const rankedPlayers = getRanking(roomState?.players);
+  const myPosition = rankedPlayers.findIndex(p => p.id === myId) + 1;
+
   // Compares the correct word to what the player actually typed, letter by letter.
   // Returns a list of { char, wrong } so the PDF can color each letter individually.
   const diffWord = (correctWord, typedWord) => {
@@ -363,10 +368,9 @@ export default function MultiplayerRace({
 
   // ── RESULTS ──
   if (raceFinished && roomState) {
-    const sorted = getRanking(roomState.players);
+    const sorted = rankedPlayers;
 
     const isHost = roomState.hostId === myId;
-    const myPosition = sorted.findIndex(p => p.id === myId) + 1;
     const didIWin = myPosition === 1;
 
     return (
