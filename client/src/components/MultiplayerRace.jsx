@@ -274,64 +274,121 @@ export default function MultiplayerRace({
   const downloadReport = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    let y = 20;
+    const marginX = 14;
+    let y = 0;
 
-    // Header
-    doc.setFontSize(20);
+    // ── Dark branded header banner ──
+    doc.setFillColor(24, 24, 27); // dark charcoal, matches your site's dark theme
+    doc.rect(0, 0, pageWidth, 32, 'F');
+    // A thin yellow accent line under the header
+    doc.setFillColor(234, 179, 8); // yellow-500
+    doc.rect(0, 32, pageWidth, 1.5, 'F');
+
+    // Logo text: "Type" in white + "Hanuman" in yellow, centered together
+    doc.setFontSize(22);
+    doc.setFont(undefined, 'bold');
+    const typeText = 'Type';
+    const hanumanText = 'Hanuman';
+    const typeWidth = doc.getTextWidth(typeText);
+    const hanumanWidth = doc.getTextWidth(hanumanText);
+    const totalWidth = typeWidth + hanumanWidth;
+    let logoX = (pageWidth - totalWidth) / 2;
+    doc.setTextColor(255, 255, 255);
+    doc.text(typeText, logoX, 18);
+    logoX += typeWidth;
+    doc.setTextColor(234, 179, 8);
+    doc.text(hanumanText, logoX, 18);
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(200, 200, 200);
+    doc.text('Multiplayer Race Report', pageWidth / 2, 26, { align: 'center' });
+
+    y = 46;
+
+    // Player name + rank line
+    doc.setFontSize(16);
     doc.setTextColor(20, 20, 20);
-    doc.text('Typing Race Report', pageWidth / 2, y, { align: 'center' });
-    y += 12;
-
+    doc.setFont(undefined, 'bold');
+    doc.text(myPlayer?.name || 'You', marginX, y);
+    doc.setFont(undefined, 'normal');
+    const rankLabel = myPosition ? `${myPosition}${myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : myPosition === 1 ? 'st' : 'th'} Place` : '-';
     doc.setFontSize(12);
-    doc.setTextColor(80, 80, 80);
-    doc.text(`Player: ${myPlayer?.name || 'You'}`, 14, y);
-    y += 8;
-    doc.text(`Rank: ${myPosition ? `${myPosition}${myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : myPosition === 1 ? 'st' : 'th'} Place` : '-'}`, 14, y);
-    y += 8;
-    doc.text(`Net WPM: ${finishStats?.wpm ?? myPlayer?.wpm ?? 0}`, 14, y);
-    y += 8;
-    doc.text(`Accuracy: ${finishStats?.accuracy ?? myPlayer?.accuracy ?? 0}%`, 14, y);
-    y += 12;
+    doc.setTextColor(120, 120, 120);
+    doc.text(rankLabel, pageWidth - marginX, y, { align: 'right' });
+    y += 10;
 
-    // Wrong words section
-    doc.setFontSize(14);
+    // ── Stat cards (WPM / Accuracy / Completed) ──
+    const cardGap = 6;
+    const cardWidth = (pageWidth - marginX * 2 - cardGap * 2) / 3;
+    const cardHeight = 24;
+    const stats = [
+      { label: 'NET WPM', value: `${finishStats?.wpm ?? myPlayer?.wpm ?? 0}` },
+      { label: 'ACCURACY', value: `${finishStats?.accuracy ?? myPlayer?.accuracy ?? 0}%` },
+      { label: 'COMPLETED', value: `${Math.round(myPlayer?.progress ?? 100)}%` },
+    ];
+    stats.forEach((s, i) => {
+      const cx = marginX + i * (cardWidth + cardGap);
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(cx, y, cardWidth, cardHeight, 3, 3, 'F');
+      doc.setFontSize(16);
+      doc.setTextColor(24, 24, 27);
+      doc.setFont(undefined, 'bold');
+      doc.text(s.value, cx + cardWidth / 2, y + 12, { align: 'center' });
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text(s.label, cx + cardWidth / 2, y + 19, { align: 'center' });
+    });
+    y += cardHeight + 14;
+
+    // ── Wrong words section ──
+    doc.setFillColor(234, 179, 8);
+    doc.rect(marginX, y - 4, 3, 12, 'F'); // small yellow tab marker
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
     doc.setTextColor(20, 20, 20);
-    doc.text('Words To Practice', 14, y);
-    y += 8;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, y, pageWidth - 14, y);
-    y += 8;
+    doc.text('Words To Practice', marginX + 7, y + 4);
+    doc.setFont(undefined, 'normal');
+    y += 14;
 
     if (wrongWordsRef.current.length === 0) {
-      doc.setFontSize(12);
-      doc.setTextColor(0, 130, 0);
-      doc.text('No mistakes! Great job.', 14, y);
-      y += 10;
+      doc.setFillColor(240, 253, 244);
+      doc.roundedRect(marginX, y - 6, pageWidth - marginX * 2, 14, 3, 3, 'F');
+      doc.setFontSize(11);
+      doc.setTextColor(21, 128, 61);
+      doc.text('No mistakes — great job!', marginX + 5, y + 3);
+      y += 16;
     } else {
-      doc.setFontSize(12);
-      wrongWordsRef.current.forEach(({ correctWord, typedWord }) => {
-        if (y > 270) { // start a new page if we run out of room
+      doc.setFontSize(11);
+      wrongWordsRef.current.forEach(({ correctWord, typedWord }, idx) => {
+        if (y > 265) { // start a new page if we run out of room
           doc.addPage();
           y = 20;
         }
-        let x = 14;
+        // light alternating row background
+        if (idx % 2 === 0) {
+          doc.setFillColor(250, 250, 250);
+          doc.rect(marginX, y - 5.5, pageWidth - marginX * 2, 9, 'F');
+        }
+        let x = marginX + 3;
         const diffed = diffWord(correctWord, typedWord);
         diffed.forEach(({ char, wrong }) => {
-          doc.setTextColor(wrong ? 220 : 20, wrong ? 30 : 20, wrong ? 30 : 20);
+          doc.setTextColor(wrong ? 220 : 30, wrong ? 38 : 30, wrong ? 38 : 30);
           doc.text(char, x, y);
           x += doc.getTextWidth(char);
         });
         // show what they actually typed, in gray, next to it
-        doc.setTextColor(150, 150, 150);
-        doc.text(`   (you typed: ${typedWord})`, x + 2, y);
-        y += 8;
+        doc.setTextColor(160, 160, 160);
+        doc.setFontSize(9);
+        doc.text(`you typed: ${typedWord}`, pageWidth - marginX - 3, y, { align: 'right' });
+        doc.setFontSize(11);
+        y += 9;
       });
 
       // Simple practice tip based on the pattern of mistakes
-      y += 6;
-      if (y > 260) { doc.addPage(); y = 20; }
-      doc.setFontSize(12);
-      doc.setTextColor(20, 20, 20);
+      y += 8;
+      if (y > 255) { doc.addPage(); y = 20; }
       const endMistakes = wrongWordsRef.current.filter(w => {
         const diffed = diffWord(w.correctWord, w.typedWord);
         const wrongCount = diffed.filter(d => d.wrong).length;
@@ -342,7 +399,22 @@ export default function MultiplayerRace({
       if (endMistakes >= Math.ceil(wrongWordsRef.current.length / 2)) {
         tip = 'You often get the last letters of a word wrong — try to fully finish typing each word before your fingers move on.';
       }
-      doc.text(`Tip: ${tip}`, 14, y, { maxWidth: pageWidth - 28 });
+      doc.setFillColor(255, 251, 235);
+      const tipLines = doc.splitTextToSize(`Tip: ${tip}`, pageWidth - marginX * 2 - 10);
+      doc.roundedRect(marginX, y - 6, pageWidth - marginX * 2, tipLines.length * 6 + 6, 3, 3, 'F');
+      doc.setFontSize(10);
+      doc.setTextColor(146, 64, 14);
+      doc.text(tipLines, marginX + 5, y);
+      y += tipLines.length * 6 + 6;
+    }
+
+    // ── Footer ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFontSize(8);
+      doc.setTextColor(180, 180, 180);
+      doc.text('Generated by TypeHanuman.com', pageWidth / 2, 290, { align: 'center' });
     }
 
     doc.save(`${(myPlayer?.name || 'player').replace(/\s+/g, '_')}_race_report.pdf`);
@@ -397,8 +469,13 @@ export default function MultiplayerRace({
             </div>
           </div>
           <button onClick={downloadReport}
-            className="mt-4 mx-auto flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-sm px-5 py-2.5 rounded-lg transition">
-            📄 Download My Report (PDF)
+            className={`mt-4 mx-auto flex items-center gap-1.5 text-sm font-medium transition hover:opacity-75 ${theme === 'dark' ? 'text-yellow-400' : theme === 'sepia' ? 'text-amber-700' : 'text-blue-600'}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Result
           </button>
         </div>
 
