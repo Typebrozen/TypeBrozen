@@ -1,10 +1,21 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
+import {
+  createInitialState,
+  appendChar,
+  backspace,
+  reopenPreviousWord,
+  commitWord,
+  checkTimeout,
+  computeStats,
+} from "../engine/engine";
+import { toGraphemeSpans } from "../engine/graphemes";
+import { toKrutiSpans } from "../engine/krutiSpans";
 import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
+import { getNextKeyInfo } from "../engine/nextKey";
+import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
-import { KRUTI_EXTENDED_KEYMAP } from "../layouts/krutidev-extended";
 import { EXAM_CONFIGS } from "../lessons/examConfig";
-import { EXAM_PARAGRAPHS } from "../lessons/examParagraphs";
+import { resolveChapters } from "../lessons/contentResolver";
 
 const IGNORED_KEYS = new Set([
   "Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape",
@@ -12,25 +23,45 @@ const IGNORED_KEYS = new Set([
   "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
 ]);
 
-// Ek chuna hua chapter poore exam-duration tak "loop" karna hai — jitni
-// baar zaroorat pade utni baar wahi text dobara jod dete hain, taaki
-// 100 WPM tak ke bahut fast typist ke liye bhi text kabhi khatam na ho.
+const LAYOUT_LABELS = {
+  inscript: "Mangal (InScript)",
+  gail: "Mangal (Remington GAIL)",
+  krutidev: "Krutidev 010",
+};
+
+// "krutidev" aur "gail" dono raw Kruti-Dev-style physical keys use
+// karte hain (target text already uni2kru se convert ho chuka hota
+// hai contentResolver mein) — isliye typing-logic ke liye ye dono
+// EK jaisa treat hote hain. Sirf "inscript" alag hai.
+function isRawGlyphLayout(layout) {
+  return layout === "krutidev" || layout === "gail";
+}
+
+function maxWordsBackFor(backspaceMode) {
+  if (backspaceMode === "full") return Infinity;
+  if (backspaceMode === "currentPlusOneWord") return 1;
+  return 0; // "currentWordOnly" aur "none" dono ke liye 0
+}
+
 function buildLoopedParagraph(chapterText, durationSeconds) {
   const targetWords = Math.ceil((durationSeconds / 60) * 100);
   const chapterWordCount = chapterText.split(/\s+/).filter(Boolean).length;
   const repeats = Math.max(1, Math.ceil(targetWords / chapterWordCount));
-
   return Array(repeats).fill(chapterText).join(" ");
 }
 
 export default function ExamMode({ onExit }) {
-  const [examKey, setExamKey] = useState(null); // "cpct" | "ssc" | "highcourt" | "upsssc" | null
-  const [chapterIndex, setChapterIndex] = useState(null); // index into EXAM_PARAGRAPHS[examKey]
+  const [examKey, setExamKey] = useState(null);
+  const [layout, setLayout] = useState(null); 
+  const [chapterIndex, setChapterIndex] = useState(null);
   const [state, setState] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
   const config = examKey ? EXAM_CONFIGS[examKey] : null;
-  const chapters = examKey ? EXAM_PARAGRAPHS[examKey] : [];
+  const needsLayoutChoice = config && config.layouts.length > 1;
+  const activeLayout = config ? layout ?? (config.layouts.length === 1 ? config.layouts[0] : null) : null;
+
+  const chapters = config && activeLayout ? resolveChapters(config.contentCategories, activeLayout) : [];
   const activeChapter = chapterIndex !== null ? chapters[chapterIndex] : null;
 
   const typedTrackRef = useRef("");
@@ -38,30 +69,57 @@ export default function ExamMode({ onExit }) {
     typedTrackRef.current = state?.typed ?? "";
   }, [state?.typed]);
 
-  // Passage box ko typing progress ke hisaab se scroll karo (proportional),
-  // aur "aapki typing" box ko hamesha neeche (latest text) tak scroll karo.
+  const hiddenInputRef = useRef(null);
+
+  const activeWordRef = useRef(null);
   const passageRef = useRef(null);
   const typedBoxRef = useRef(null);
-  useEffect(() => {
-    if (!state) return;
-    const typedSoFarLength =
-      state.words.slice(0, state.wordIndex).join(" ").length +
-      (state.wordIndex > 0 ? 1 : 0) +
-      state.typed.length;
-    const totalLength = state.words.join(" ").length;
+  const lastLineTopRef = useRef(0);
 
-    if (passageRef.current && totalLength > 0) {
-      const el = passageRef.current;
-      const progress = Math.min(1, typedSoFarLength / totalLength);
-      el.scrollTop = progress * (el.scrollHeight - el.clientHeight);
+  // --- UPDATED useEffect BLOCK START ---
+  useEffect(() => {
+    const container = passageRef.current;
+    const activeEl = activeWordRef.current;
+
+    if (container && activeEl) {
+      // getBoundingClientRect se hisaab lagate hain — offsetTop ki
+      // tarah container ke position: relative hone par depend nahi
+      // karta, isliye kabhi galat/bada number nahi deta.
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+
+      if (relativeTop !== lastLineTopRef.current) {
+        lastLineTopRef.current = relativeTop;
+        container.scrollTo({ top: relativeTop, behavior: "smooth" });
+      }
     }
     if (typedBoxRef.current) {
       typedBoxRef.current.scrollTop = typedBoxRef.current.scrollHeight;
     }
-  }, [state?.typed, state?.wordIndex]);
+  }, [state?.wordIndex]);
+  // --- UPDATED useEffect BLOCK END ---
+
+  useEffect(() => {
+    if (activeLayout === "krutidev" && state && !state.finished) {
+      hiddenInputRef.current?.focus();
+    }
+  }, [activeLayout, state]);
+
+  function refocusHiddenInput() {
+    if (activeLayout === "krutidev" && state && !state.finished) {
+      hiddenInputRef.current?.focus();
+    }
+  }
 
   const selectExam = (key) => {
     setExamKey(key);
+    setLayout(null);
+    setChapterIndex(null);
+  };
+
+  const selectLayout = (l) => {
+    setLayout(l);
     setChapterIndex(null);
   };
 
@@ -86,23 +144,33 @@ export default function ExamMode({ onExit }) {
     setState(null);
   };
 
-  const exitExam = () => {
-    setExamKey(null);
+  const backToLayoutChoice = () => {
+    setLayout(null);
     setChapterIndex(null);
     setState(null);
   };
 
-  // Keyboard input — sirf jab exam active ho
+  const exitExam = () => {
+    setExamKey(null);
+    setLayout(null);
+    setChapterIndex(null);
+    setState(null);
+  };
+
+  // Keyboard input
   useEffect(() => {
-    if (!config || !state) return;
+    if (!config || !state || !activeLayout) return;
 
     function handleKeyDown(e) {
       if (state.finished) return;
       if (IGNORED_KEYS.has(e.key)) return;
 
-      // Copy-paste block — real exam jaisa
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
         e.preventDefault();
+        return;
+      }
+
+      if (activeLayout === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
         return;
       }
 
@@ -113,18 +181,20 @@ export default function ExamMode({ onExit }) {
         setNow(Date.now());
         return;
       }
+
       if (e.code === "Backspace") {
-        if (!config.backspaceAllowed) return; // real exam rule
-        setState((prev) => backspace(prev));
+        if (config.backspaceMode === "none") return; 
+        if (state.typed.length > 0) {
+          setState((prev) => backspace(prev));
+          return;
+        }
+        setState((prev) => reopenPreviousWord(prev, maxWordsBackFor(config.backspaceMode)));
         return;
       }
 
       let charToAppend = null;
 
-      if (config.mode === "krutidev" && e.altKey) {
-        const base = resolveAltGrKey(e);
-        charToAppend = base ? KRUTI_EXTENDED_KEYMAP[base] : null;
-      } else if (config.mode === "krutidev") {
+      if (isRawGlyphLayout(activeLayout)) {
         charToAppend = resolvePhysicalKey(e);
       } else if (e.altKey) {
         const base = resolveAltGrKey(e);
@@ -138,9 +208,23 @@ export default function ExamMode({ onExit }) {
       setState((prev) => appendChar(prev, charToAppend));
     }
 
+    function handleHiddenInput(e) {
+      if (activeLayout !== "krutidev") return;
+      const typedChar = e.target.value;
+      e.target.value = "";
+      if (!typedChar) return;
+      if (state.finished) return;
+      setState((prev) => appendChar(prev, typedChar));
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state, config]);
+    const hiddenInput = hiddenInputRef.current;
+    hiddenInput?.addEventListener("input", handleHiddenInput);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      hiddenInput?.removeEventListener("input", handleHiddenInput);
+    };
+  }, [state, config, activeLayout]);
 
   // Timer
   useEffect(() => {
@@ -153,7 +237,7 @@ export default function ExamMode({ onExit }) {
     return () => clearInterval(interval);
   }, [state?.finished]);
 
-  const fontFamily = config?.mode === "krutidev"
+  const fontFamily = isRawGlyphLayout(activeLayout)
     ? "'Kruti Dev 010', sans-serif"
     : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
@@ -172,9 +256,7 @@ export default function ExamMode({ onExit }) {
           >
             <span className="font-medium">{cfg.label}</span>
             <span className="ml-2 text-xs text-white/40">
-              {cfg.fullName} · {Math.round(cfg.durationSeconds / 60)} min ·{" "}
-              {cfg.mode === "mangal" ? "Mangal" : "Krutidev"} ·{" "}
-              {cfg.backspaceAllowed ? "Backspace allowed" : "Backspace disabled"}
+              {cfg.fullName} · {Math.round(cfg.durationSeconds / 60)} min
             </span>
           </button>
         ))}
@@ -187,30 +269,56 @@ export default function ExamMode({ onExit }) {
     );
   }
 
-  // ── SCREEN 2: Chapter picker (jaise Type Master ke lessons) ──
+  // ── SCREEN 2: Layout picker ──
+  if (needsLayoutChoice && !activeLayout) {
+    return (
+      <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
+        <p className="text-sm text-center text-white/60 mb-2">
+          {config.label} — apna keyboard layout chuno
+        </p>
+        {config.layouts.map((l) => (
+          <button
+            key={l}
+            onClick={() => selectLayout(l)}
+            className="text-left px-4 py-3 rounded-xl text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white"
+          >
+            <span className="font-medium">{LAYOUT_LABELS[l]}</span>
+          </button>
+        ))}
+        <button onClick={exitExam} className="mx-auto mt-2 text-sm text-white/40 underline">
+          ← दूसरा Exam चुनें
+        </button>
+      </div>
+    );
+  }
+
+  // ── SCREEN 3: Chapter picker ──
   if (chapterIndex === null) {
     return (
       <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
         <p className="text-sm text-center text-white/60 mb-2">
-          {config.label} — ek chapter chuno
+          {config.label} ({LAYOUT_LABELS[activeLayout]}) — ek chapter चुनो
         </p>
         {chapters.map((chapter, idx) => {
           const wordCount = chapter.text.split(/\s+/).filter(Boolean).length;
           return (
             <button
-              key={idx}
+              key={chapter.id}
               onClick={() => startChapter(idx)}
               className="text-left px-4 py-3 rounded-xl text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white"
+              style={{ fontFamily }}
             >
               <span className="font-medium">
                 {idx + 1}. {chapter.title}
               </span>
-              <span className="ml-2 text-xs text-white/40">{wordCount} शब्द</span>
+              <span className="ml-2 text-xs text-white/40" style={{ fontFamily: "inherit" }}>
+                {wordCount} शब्द
+              </span>
             </button>
           );
         })}
-        <button onClick={exitExam} className="mx-auto mt-2 text-sm text-white/40 underline">
-          ← दूसरा Exam चुनें
+        <button onClick={needsLayoutChoice ? backToLayoutChoice : exitExam} className="mx-auto mt-2 text-sm text-white/40 underline">
+          ← वापस जाएं
         </button>
       </div>
     );
@@ -224,7 +332,7 @@ export default function ExamMode({ onExit }) {
   const timeColor =
     remainingSeconds <= 10 ? "text-red-400" : remainingSeconds <= 30 ? "text-yellow-400" : "text-green-400";
 
-  // ── SCREEN 3: Result (only shown after finishing) ──
+  // ── SCREEN 4: Result ──
   if (state.finished) {
     const stats = computeStats(state, elapsedMs);
     const netScore = config.scoreMethod === "rsmssb" ? stats.netWpmRSMSSB : stats.netWpmSSC;
@@ -232,7 +340,7 @@ export default function ExamMode({ onExit }) {
     return (
       <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
         <p className="text-sm uppercase tracking-widest text-white/40">
-          {config.fullName} · {activeChapter?.title}
+          {config.fullName} · {LAYOUT_LABELS[activeLayout]}
         </p>
         <div className="text-center">
           <p className="text-8xl font-bold tabular-nums text-white">{netScore}</p>
@@ -278,21 +386,31 @@ export default function ExamMode({ onExit }) {
     );
   }
 
-  // Ab tak type kiya hua poora text — plain, bina kisi color ke (blind mode)
   const typedSoFar =
     state.words.slice(0, state.wordIndex).join(" ") +
     (state.wordIndex > 0 ? " " : "") +
     state.typed;
 
-  // ── SCREEN 4: Blind typing screen (real exam jaisa) ──
+  // ── SCREEN 5: Blind typing screen ──
   return (
     <div
       className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8"
       onContextMenu={(e) => e.preventDefault()}
+      onClick={refocusHiddenInput}
     >
+      <input
+        ref={hiddenInputRef}
+        tabIndex={-1}
+        className="fixed opacity-0 pointer-events-none"
+        style={{ top: 0, left: 0, width: 1, height: 1 }}
+      />
+
       <p className="text-center text-xs text-white/40 uppercase tracking-wider">
-        {config.fullName} · {activeChapter?.title} —{" "}
-        {config.backspaceAllowed ? "Backspace allowed" : "Backspace disabled"}
+        {config.fullName} · {LAYOUT_LABELS[activeLayout]} — Backspace:{" "}
+        {config.backspaceMode === "full" && "पूरी तरह Allowed"}
+        {config.backspaceMode === "none" && "बंद"}
+        {config.backspaceMode === "currentWordOnly" && "सिर्फ मौजूदा शब्द तक"}
+        {config.backspaceMode === "currentPlusOneWord" && "मौजूदा + 1 पिछला शब्द"}
       </p>
       <button onClick={backToChapterList} className="mx-auto text-xs text-white/30 underline">
         Chapter बदलें
@@ -306,10 +424,14 @@ export default function ExamMode({ onExit }) {
         <p className="text-xs text-white/30 mb-2 uppercase tracking-wider">Passage</p>
         <div
           ref={passageRef}
-          className="text-xl text-gray-300 leading-relaxed select-none overflow-y-auto hide-scrollbar"
+          className="text-xl text-gray-300 leading-relaxed select-none overflow-y-auto hide-scrollbar flex flex-wrap gap-x-2"
           style={{ fontFamily, maxHeight: "7.5rem" }}
         >
-          {state.words.join(" ")}
+          {state.words.map((word, idx) => (
+            <span key={idx} ref={idx === state.wordIndex ? activeWordRef : null}>
+              {word}
+            </span>
+          ))}
         </div>
       </div>
 

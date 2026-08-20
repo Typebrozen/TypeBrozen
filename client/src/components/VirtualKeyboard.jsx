@@ -65,19 +65,26 @@ function widthPx(u) {
   return u * UNIT + (u - 1) * GAP;
 }
 
-// mode: "mangal" | "krutidev"
+// mode: "mangal" | "krutidev" | "gail"
+// GAIL raw keystrokes are identical to Krutidev's — the same physical
+// key positions print the same Devanagari-looking glyphs on a real
+// GAIL keyboard (that's the entire point of GAIL: familiar to Krutidev
+// typists). So for rendering purposes GAIL behaves exactly like
+// Krutidev — only Mangal is structurally different.
 export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
-  const glyphFontFamily =
-    mode === "krutidev" ? "'Kruti Dev 010', sans-serif" : "'Noto Sans Devanagari', 'Mangal', sans-serif";
+  const isRawGlyphMode = mode === "krutidev" || mode === "gail";
+  const glyphFontFamily = isRawGlyphMode
+    ? "'Kruti Dev 010', sans-serif"
+    : "'Noto Sans Devanagari', 'Mangal', sans-serif";
 
   function glyphFor(label) {
-    if (mode === "krutidev") return label;
+    if (isRawGlyphMode) return label;
     return MANGAL_KEYMAP[label] ?? "";
   }
 
-  // Krutidev special characters (Alt+numpad) don't correspond to any
-  // single letter key on this layout anymore, so we highlight both Alt
-  // keys generically and show the exact digit sequence above the board.
+  // Alt+numpad special characters only apply to Krutidev's own extra
+  // glyphs — GAIL's special characters come through kru2uni's multi-key
+  // ASCII patterns instead, no Alt+numpad involved, so no banner for it.
   const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
   const altCodeSequence = showAltCodeBanner ? "0" + nextKey.altCode : null;
 
@@ -93,10 +100,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               if (FUNCTION_KEYS.has(code)) {
                 const isShiftHighlight =
                   nextKey?.shift && !nextKey?.altGr && (code === "ShiftLeft" || code === "ShiftRight");
-                // Mangal nukta guidance highlights Right Alt (real AltGr key).
                 const isAltGrHighlight = mode === "mangal" && nextKey?.altGr && code === "AltRight";
-                // Krutidev Alt+numpad guidance highlights BOTH Alt keys,
-                // since there's no fixed side and no numpad drawn here.
                 const isAltCodeHighlight =
                   showAltCodeBanner && (code === "AltLeft" || code === "AltRight");
                 const isSpaceHighlight = code === "Space" && nextKey?.label === " ";
@@ -123,9 +127,6 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
               const shiftLabel = getShiftedLabel(base);
               const baseGlyph = glyphFor(base);
               const shiftGlyph = glyphFor(shiftLabel);
-              // Nukta lookup only applies to Mangal mode now — Krutidev's
-              // special characters go through Alt+numpad, not a per-letter
-              // AltGr map, so there's nothing to show here for it anymore.
               const nuktaGlyph = mode === "mangal" ? NUKTA_KEYMAP[base] : null;
 
               const isActiveBase =
@@ -147,9 +148,6 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
                       : "bg-gradient-to-b from-zinc-800 to-zinc-900 border-zinc-950 text-zinc-200",
                   ].join(" ")}
                 >
-                  {/* Jo letter is waqt ACTUALLY type karni hai, wahi bada/bold
-                      dikhta hai — chahe wo shift wala ho ya normal wala.
-                      Baaki chhota/faded rehta hai, taaki confusion na ho. */}
                   <span
                     style={{
                       fontSize: isActiveShift ? 15 : 9,

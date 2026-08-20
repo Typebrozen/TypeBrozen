@@ -77,6 +77,8 @@ export default function HindiTypingTest() {
   );
   const [now, setNow] = useState(() => Date.now());
   const activeWordRef = useRef(null);
+  const passageContainerRef = useRef(null);
+  const lastLineTopRef = useRef(0);
 
   // Invisible, always-focused text box. This is the key piece that makes
   // real Alt+Numpad work: Windows resolves Alt+0184 into the actual
@@ -101,9 +103,22 @@ export default function HindiTypingTest() {
     prevFinishedRef.current = state.finished;
   }, [state.finished]);
 
+  // --- UPDATED useEffect BLOCK START ---
   useEffect(() => {
-    activeWordRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const container = passageContainerRef.current;
+    const activeEl = activeWordRef.current;
+    if (!container || !activeEl) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+    const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+
+    if (relativeTop !== lastLineTopRef.current) {
+      lastLineTopRef.current = relativeTop;
+      container.scrollTo({ top: relativeTop, behavior: "smooth" });
+    }
   }, [state.wordIndex]);
+  // --- UPDATED useEffect BLOCK END ---
 
   // Keeps the hidden input focused during actual Krutidev typing, so the
   // OS always has somewhere to deliver an Alt+Numpad character. Deliberately
@@ -492,6 +507,7 @@ export default function HindiTypingTest() {
           {/* Glassy paragraph box */}
           <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-xl">
             <div
+              ref={passageContainerRef}
               className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
               style={{ fontFamily, lineHeight: "3.5rem", maxHeight: "7.5rem" }}
             >

@@ -60,13 +60,9 @@ export function resolvePhysicalKey(e: { code: string; shiftKey: boolean }): stri
   return getShiftedLabel(base);
 }
 
-// Nukta letters (borrowed sounds) ek alag AltGr layer pe rehte hain,
-// normal Inscript layout se separate. Aage aur nukta letters
-// (क़, ख़, ग़, ज़, फ़, य़) chahiye ho toh yahin add kar dena.
-export const NUKTA_KEYMAP: Record<string, string> = {
-  "[": "ढ़",
-};
-
+// Nukta letters resolve via the plain physical key — actual nukta
+// character lookup lives solely in layouts/mangal-keymap.ts
+// (NUKTA_KEYMAP), so there's one source of truth.
 export function resolveAltGrKey(e: { code: string }): string | null {
   return CODE_TO_BASE_KEY[e.code] ?? null;
 }
