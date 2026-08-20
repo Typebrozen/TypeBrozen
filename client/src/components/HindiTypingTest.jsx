@@ -64,7 +64,7 @@ function encouragement(cpm) {
 }
 
 export default function HindiTypingTest() {
-  const [mode, setMode] = useState("mangal"); // "mangal" | "krutidev"
+  const [mode, setMode] = useState("mangal"); // "mangal" | "gail" | "krutidev"
   const [showExam, setShowExam] = useState(false);
   const [testMode, setTestMode] = useState("time"); // "time" | "custom"
   const [selectedTime, setSelectedTime] = useState(DEFAULT_MINUTES * 60);
@@ -103,7 +103,9 @@ export default function HindiTypingTest() {
     prevFinishedRef.current = state.finished;
   }, [state.finished]);
 
-  // --- UPDATED useEffect BLOCK START ---
+  // Line-boundary based scroll — sirf tabhi scroll karta hai jab active
+  // word ek NAYE line par jaata hai (offsetTop badal jaata hai), poora
+  // container bharne ka wait nahi karta.
   useEffect(() => {
     const container = passageContainerRef.current;
     const activeEl = activeWordRef.current;
@@ -118,16 +120,17 @@ export default function HindiTypingTest() {
       container.scrollTo({ top: relativeTop, behavior: "smooth" });
     }
   }, [state.wordIndex]);
-  // --- UPDATED useEffect BLOCK END ---
 
-  // Keeps the hidden input focused during actual Krutidev typing, so the
-  // OS always has somewhere to deliver an Alt+Numpad character. Deliberately
-  // narrow: no window-wide listeners, no repeating timer — those were
-  // stealing focus from the custom-text paste textarea. This only runs
-  // once when the typing screen itself becomes visible.
+  // Keeps the hidden input focused during actual Krutidev/GAIL typing, so
+  // the OS always has somewhere to deliver an Alt+Numpad character (or,
+  // for GAIL, just acts as a normal focus target — GAIL doesn't use
+  // Alt+Numpad but shares the same raw-key handling path as Krutidev).
+  // Deliberately narrow: no window-wide listeners, no repeating timer —
+  // those were stealing focus from the custom-text paste textarea. This
+  // only runs once when the typing screen itself becomes visible.
   const showTypingArea = testMode !== "custom" || customReady;
   useEffect(() => {
-    if (mode === "krutidev" && showTypingArea) {
+    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
       hiddenInputRef.current?.focus();
     }
   }, [mode, showTypingArea]);
@@ -136,19 +139,19 @@ export default function HindiTypingTest() {
   // area itself (e.g. after accidentally clicking elsewhere on it) —
   // scoped to a single element via onClick below, never global.
   function refocusHiddenInput() {
-    if (mode === "krutidev" && showTypingArea) {
+    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
       hiddenInputRef.current?.focus();
     }
   }
 
-
   const reset = useCallback(
     (durationSeconds = selectedTime, activeMode = mode) => {
       if (testMode === "custom" && customReady) {
-        const { paragraph } = prepareCustomParagraph(customText, activeMode);
+        const { paragraph } = prepareCustomParagraph(customText, activeMode === "gail" ? "krutidev" : activeMode);
         setState(createInitialState(paragraph, durationSeconds * 1000));
       } else {
-        const source = activeMode === "krutidev" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+        const source =
+          activeMode === "krutidev" || activeMode === "gail" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
         setState(createInitialState(randomParagraph(source), durationSeconds * 1000));
       }
       setNow(Date.now());
@@ -176,7 +179,7 @@ export default function HindiTypingTest() {
   };
 
   const handleStartCustom = () => {
-    const { paragraph, skippedCount } = prepareCustomParagraph(customText, mode);
+    const { paragraph, skippedCount } = prepareCustomParagraph(customText, mode === "gail" ? "krutidev" : mode);
 
     if (!paragraph) return;
 
@@ -208,9 +211,10 @@ export default function HindiTypingTest() {
       if (testMode === "custom" && !customReady) return;
 
       // Alt + a Numpad digit: this is a real Alt+Numpad sequence in
-      // progress. We must NOT preventDefault or otherwise intercept
-      // it — doing so stops Windows from ever resolving it into a
-      // character. Just let it through to the hidden input.
+      // progress (Krutidev only). We must NOT preventDefault or
+      // otherwise intercept it — doing so stops Windows from ever
+      // resolving it into a character. Just let it through to the
+      // hidden input.
       if (mode === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
         return;
       }
@@ -242,10 +246,11 @@ export default function HindiTypingTest() {
 
       let charToAppend = null;
 
-      if (mode === "krutidev") {
-        // Plain Krutidev keys always type their normal glyph, whether or
-        // not Alt happens to be held — the special-character path is
-        // handled separately via the hidden input above.
+      if (mode === "krutidev" || mode === "gail") {
+        // Plain Krutidev/GAIL keys always type their normal glyph,
+        // whether or not Alt happens to be held — Krutidev's special-
+        // character path is handled separately via the hidden input
+        // above; GAIL has no separate special-character path at all.
         charToAppend = resolvedKey;
       } else if (e.altKey) {
         const base = resolveAltGrKey(e);
@@ -264,7 +269,7 @@ export default function HindiTypingTest() {
     // the real character into our hidden input. We grab it and clear the
     // box straight away so it's always empty and ready for the next one.
     function handleHiddenInput(e) {
-      if (mode !== "krutidev") return;
+      if (mode !== "krutidev" && mode !== "gail") return;
       const typedChar = e.target.value;
       e.target.value = "";
       if (!typedChar) return;
@@ -297,7 +302,7 @@ export default function HindiTypingTest() {
 
   const elapsedMs = state.startTime ? now - state.startTime : 0;
   const fontFamily =
-    mode === "krutidev"
+    mode === "krutidev" || mode === "gail"
       ? "'Kruti Dev 010', sans-serif"
       : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
@@ -379,7 +384,7 @@ export default function HindiTypingTest() {
   const nextKeyInfo =
     state.typed.length >= activeWord.length
       ? { label: " ", shift: false }
-      : mode === "krutidev"
+      : mode === "krutidev" || mode === "gail"
       ? getNextKrutiKeyInfo(activeWord[state.typed.length])
       : getNextKeyInfo(activeWord.slice(state.typed.length));
 
@@ -401,15 +406,23 @@ export default function HindiTypingTest() {
         style={{ top: 0, left: 0, width: 1, height: 1 }}
       />
 
-      {/* Mode selector — Mangal vs Krutidev */}
-      <div className="flex justify-center gap-2">
+      {/* Mode selector — Mangal InScript vs Mangal GAIL vs Krutidev */}
+      <div className="flex justify-center gap-2 flex-wrap">
         <button
           onClick={() => handleSelectMode("mangal")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
             mode === "mangal" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
           }`}
         >
-          Mangal (Unicode)
+          Mangal (InScript)
+        </button>
+        <button
+          onClick={() => handleSelectMode("gail")}
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+            mode === "gail" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+          }`}
+        >
+          Mangal (Remington GAIL)
         </button>
         <button
           onClick={() => handleSelectMode("krutidev")}
@@ -421,7 +434,7 @@ export default function HindiTypingTest() {
         </button>
       </div>
 
-      {mode === "krutidev" && (
+      {(mode === "krutidev" || mode === "gail") && (
         <p className="text-center text-xs text-white/40">
           विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
         </p>
@@ -525,7 +538,7 @@ export default function HindiTypingTest() {
                 }
 
                 if (wIdx === state.wordIndex) {
-                  const spans = mode === "krutidev" ? toKrutiSpans(word) : toGraphemeSpans(word);
+                  const spans = mode === "krutidev" || mode === "gail" ? toKrutiSpans(word) : toGraphemeSpans(word);
                   const typed = state.typed;
 
                   return (
