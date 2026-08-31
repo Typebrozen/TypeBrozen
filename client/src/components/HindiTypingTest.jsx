@@ -10,6 +10,7 @@ import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 import ExamMode from "./ExamMode";
+import { downloadResultPdf } from "../utils/downloadPdf";
 
 import keySoundFile from '../assets/key.mp3';
 import errorSoundFile from '../assets/error.mp3';
@@ -33,6 +34,12 @@ const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10, 15];
 const TIME_EXAM_LABELS = {
   10: "SSC / Railway / Court",
   15: "CPCT",
+};
+
+const MODE_LABELS = {
+  mangal: "Mangal (InScript)",
+  gail: "Mangal (Remington GAIL)",
+  krutidev: "Krutidev 010",
 };
 
 const DEFAULT_MINUTES = 1;
@@ -71,6 +78,7 @@ export default function HindiTypingTest() {
   const [customText, setCustomText] = useState("");
   const [customReady, setCustomReady] = useState(false);
   const [customNotice, setCustomNotice] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [state, setState] = useState(() =>
     createInitialState(randomParagraph(HINDI_PARAGRAPHS), DEFAULT_MINUTES * 60 * 1000)
@@ -80,11 +88,6 @@ export default function HindiTypingTest() {
   const passageContainerRef = useRef(null);
   const lastLineTopRef = useRef(0);
 
-  // Invisible, always-focused text box. This is the key piece that makes
-  // real Alt+Numpad work: Windows resolves Alt+0184 into the actual
-  // character itself and inserts it wherever text focus currently is —
-  // we can't replicate that resolution in JS, we just need something
-  // focused to receive it, then read it out and clear it immediately.
   const hiddenInputRef = useRef(null);
 
   const typedTrackRef = useRef(state.typed);
@@ -103,9 +106,6 @@ export default function HindiTypingTest() {
     prevFinishedRef.current = state.finished;
   }, [state.finished]);
 
-  // Line-boundary based scroll — sirf tabhi scroll karta hai jab active
-  // word ek NAYE line par jaata hai (offsetTop badal jaata hai), poora
-  // container bharne ka wait nahi karta.
   useEffect(() => {
     const container = passageContainerRef.current;
     const activeEl = activeWordRef.current;
@@ -121,13 +121,6 @@ export default function HindiTypingTest() {
     }
   }, [state.wordIndex]);
 
-  // Keeps the hidden input focused during actual Krutidev/GAIL typing, so
-  // the OS always has somewhere to deliver an Alt+Numpad character (or,
-  // for GAIL, just acts as a normal focus target — GAIL doesn't use
-  // Alt+Numpad but shares the same raw-key handling path as Krutidev).
-  // Deliberately narrow: no window-wide listeners, no repeating timer —
-  // those were stealing focus from the custom-text paste textarea. This
-  // only runs once when the typing screen itself becomes visible.
   const showTypingArea = testMode !== "custom" || customReady;
   useEffect(() => {
     if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
@@ -135,9 +128,6 @@ export default function HindiTypingTest() {
     }
   }, [mode, showTypingArea]);
 
-  // Re-focuses the hidden input if the user clicks inside the typing
-  // area itself (e.g. after accidentally clicking elsewhere on it) —
-  // scoped to a single element via onClick below, never global.
   function refocusHiddenInput() {
     if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
       hiddenInputRef.current?.focus();
@@ -193,7 +183,32 @@ export default function HindiTypingTest() {
     setNow(Date.now());
   };
 
-  // Keyboard input
+  const handleDownloadPdf = (stats) => {
+    setDownloadingPdf(true);
+    try {
+      downloadResultPdf({
+        title: "TypeHanuman — Practice Report",
+        meta: `${MODE_LABELS[mode]} · ${Math.round(state.durationMs / 60000)} min`,
+        stats: {
+          wpm: stats.wpm,
+          accuracy: stats.accuracy,
+          grossWpm: stats.grossWpm,
+          netWpm: stats.netWpmSSC,
+          correctWords: stats.correctWords,
+          incorrectWords: stats.incorrectWords,
+        },
+        words: state.words.slice(0, state.wordIndex),
+        typedHistory: state.typedHistory.slice(0, state.wordIndex),
+        mode,
+        filename: `TypeHanuman-Report-${Date.now()}.pdf`,
+      });
+    } catch (err) {
+      console.error("PDF download failed:", err);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   useEffect(() => {
     function playSoundFor(charToAppend) {
       const expectedChar = currentWordRef.current[typedTrackRef.current.length];
@@ -210,11 +225,6 @@ export default function HindiTypingTest() {
       if (state.finished) return;
       if (testMode === "custom" && !customReady) return;
 
-      // Alt + a Numpad digit: this is a real Alt+Numpad sequence in
-      // progress (Krutidev only). We must NOT preventDefault or
-      // otherwise intercept it — doing so stops Windows from ever
-      // resolving it into a character. Just let it through to the
-      // hidden input.
       if (mode === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
         return;
       }
@@ -247,10 +257,6 @@ export default function HindiTypingTest() {
       let charToAppend = null;
 
       if (mode === "krutidev" || mode === "gail") {
-        // Plain Krutidev/GAIL keys always type their normal glyph,
-        // whether or not Alt happens to be held — Krutidev's special-
-        // character path is handled separately via the hidden input
-        // above; GAIL has no separate special-character path at all.
         charToAppend = resolvedKey;
       } else if (e.altKey) {
         const base = resolveAltGrKey(e);
@@ -265,9 +271,6 @@ export default function HindiTypingTest() {
       setState((prev) => appendChar(prev, charToAppend));
     }
 
-    // Fires when Windows has resolved an Alt+Numpad sequence and inserted
-    // the real character into our hidden input. We grab it and clear the
-    // box straight away so it's always empty and ready for the next one.
     function handleHiddenInput(e) {
       if (mode !== "krutidev" && mode !== "gail") return;
       const typedChar = e.target.value;
@@ -289,7 +292,6 @@ export default function HindiTypingTest() {
     };
   }, [state.finished, mode, testMode, customReady]);
 
-  // Timer
   useEffect(() => {
     if (state.finished) return;
     const interval = setInterval(() => {
@@ -320,7 +322,6 @@ export default function HindiTypingTest() {
           <p className="text-xs uppercase tracking-widest mt-2 text-white/50">Characters Per Minute</p>
         </div>
 
-        {/* Primary Stats */}
         <div className="flex gap-6 flex-wrap justify-center">
           <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
             <p className="text-4xl font-bold text-white">{stats.wpm}</p>
@@ -340,7 +341,6 @@ export default function HindiTypingTest() {
           </div>
         </div>
 
-        {/* Exam Specific Stats */}
         <div className="w-full max-w-2xl p-4 rounded-2xl border border-white/10 bg-white/5">
           <p className="text-xs text-center text-white/40 mb-3 uppercase tracking-wider">
             असली परीक्षा जैसा स्कोर
@@ -368,13 +368,22 @@ export default function HindiTypingTest() {
           <p className="text-xs mt-1 text-white/40">CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
         </div>
 
-        <button
-          onClick={() => reset()}
-          className="px-8 py-3 rounded-xl font-bold bg-white text-black transition-all hover:scale-105"
-          style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
-        >
-          फिर से कोशिश करें
-        </button>
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button
+            onClick={() => reset()}
+            className="px-8 py-3 rounded-xl font-bold bg-white text-black transition-all hover:scale-105"
+            style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
+          >
+            फिर से कोशिश करें
+          </button>
+          <button
+            onClick={() => handleDownloadPdf(stats)}
+            disabled={downloadingPdf}
+            className="px-8 py-3 rounded-xl font-bold text-sm border border-white/20 text-white hover:bg-white/10 transition-all disabled:opacity-50"
+          >
+            {downloadingPdf ? "तैयार हो रहा है..." : "📄 रिजल्ट डाउनलोड करें"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -397,8 +406,6 @@ export default function HindiTypingTest() {
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8" onClick={refocusHiddenInput}>
-      {/* Invisible, always-focused input — receives real OS Alt+Numpad
-          characters. Not display:none (that would block focus). */}
       <input
         ref={hiddenInputRef}
         tabIndex={-1}
@@ -406,7 +413,6 @@ export default function HindiTypingTest() {
         style={{ top: 0, left: 0, width: 1, height: 1 }}
       />
 
-      {/* Mode selector — Mangal InScript vs Mangal GAIL vs Krutidev */}
       <div className="flex justify-center gap-2 flex-wrap">
         <button
           onClick={() => handleSelectMode("mangal")}
@@ -440,7 +446,6 @@ export default function HindiTypingTest() {
         </p>
       )}
 
-      {/* Time vs Custom vs Exam */}
       <div className="flex justify-center gap-2">
         <button
           onClick={() => handleModeToggle("time")}
@@ -466,7 +471,6 @@ export default function HindiTypingTest() {
         </button>
       </div>
 
-      {/* Custom text input screen */}
       {testMode === "custom" && !customReady && (
         <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
           <p className="text-sm text-center text-white/60">
@@ -490,7 +494,6 @@ export default function HindiTypingTest() {
 
       {showTypingArea && (
         <>
-          {/* Time selector */}
           {testMode === "time" && (
             <div className="flex justify-center gap-2 flex-wrap">
               {TIME_OPTIONS_MIN.map((min) => (
@@ -512,12 +515,10 @@ export default function HindiTypingTest() {
             </div>
           )}
 
-          {/* Timer display */}
           <div className="text-center">
             <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
           </div>
 
-          {/* Glassy paragraph box */}
           <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-xl">
             <div
               ref={passageContainerRef}
