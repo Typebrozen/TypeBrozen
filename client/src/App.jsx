@@ -4,33 +4,7 @@ import HindiTypingTest from './components/HindiTypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
-
-const THEMES = {
-  dark: {
-    bg: 'bg-zinc-950',
-    text: 'text-zinc-100',
-    header: 'text-zinc-100',
-    sub: 'text-zinc-500',
-    btn: 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200',
-    activebtn: 'bg-zinc-100 text-zinc-900',
-  },
-  light: {
-    bg: 'bg-gray-50',
-    text: 'text-gray-900',
-    header: 'text-gray-900',
-    sub: 'text-gray-500',
-    btn: 'bg-gray-200 hover:bg-gray-300 text-gray-800',
-    activebtn: 'bg-gray-900 text-white',
-  },
-  sepia: {
-    bg: 'bg-[#f4f0e8]',
-    text: 'text-[#5a4a2e]',
-    header: 'text-[#5a4a2e]',
-    sub: 'text-[#a0906e]',
-    btn: 'bg-[#e8e0d0] hover:bg-[#ddd5c0] text-[#5a4a2e]',
-    activebtn: 'bg-[#5a4a2e] text-[#f4f0e8]',
-  },
-};
+import { THEMES } from './theme';
 
 export default function App() {
   const [theme, setTheme] = useState('dark');

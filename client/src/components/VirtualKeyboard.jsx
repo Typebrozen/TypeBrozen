@@ -71,7 +71,7 @@ function widthPx(u) {
 // GAIL keyboard (that's the entire point of GAIL: familiar to Krutidev
 // typists). So for rendering purposes GAIL behaves exactly like
 // Krutidev — only Mangal is structurally different.
-export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
+export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, themeStyles: t }) {
   const isRawGlyphMode = mode === "krutidev" || mode === "gail";
   const glyphFontFamily = isRawGlyphMode
     ? "'Kruti Dev 010', sans-serif"
@@ -86,10 +86,9 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
   // glyphs — GAIL's special characters come through kru2uni's multi-key
   // ASCII patterns instead, no Alt+numpad involved, so no banner for it.
   const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
-  const altCodeSequence = showAltCodeBanner ? "0" + nextKey.altCode : null;
 
   return (
-    <div className="rounded-2xl p-5 border border-white/10 bg-gradient-to-b from-zinc-900 to-zinc-950 overflow-x-hidden">
+    <div className={`rounded-2xl p-5 border ${t.keyboardPanel} overflow-x-hidden`}>
       <div className="flex flex-col gap-1.5 items-center">
         {ROWS.map((row, rIdx) => (
           <div key={rIdx} className="flex gap-1.5">
@@ -115,7 +114,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
                       "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
                       active
                         ? "bg-gradient-to-b from-blue-400 to-blue-600 border-blue-700 text-white shadow-[0_0_14px_rgba(59,130,246,0.8)]"
-                        : "bg-gradient-to-b from-zinc-700 to-zinc-800 border-zinc-950 text-zinc-300",
+                        : t.keyboardFnKey,
                     ].join(" ")}
                   >
                     {code === "Space" ? (isSpaceHighlight ? "अगला शब्द" : "") : FUNCTION_LABELS[code]}
@@ -145,7 +144,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal" }) {
                     "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
                     active
                       ? "bg-gradient-to-b from-blue-400 to-blue-600 border-blue-700 text-white shadow-[0_0_14px_rgba(59,130,246,0.85)] scale-[1.05]"
-                      : "bg-gradient-to-b from-zinc-800 to-zinc-900 border-zinc-950 text-zinc-200",
+                      : t.keyboardKey,
                   ].join(" ")}
                 >
                   <span

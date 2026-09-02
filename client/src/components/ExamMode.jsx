@@ -50,7 +50,7 @@ function buildLoopedParagraph(chapterText, durationSeconds) {
   return Array(repeats).fill(chapterText).join(" ");
 }
 
-export default function ExamMode({ onExit }) {
+export default function ExamMode({ onExit, theme, themeStyles: t }) {
   const [examKey, setExamKey] = useState(null);
   const [layout, setLayout] = useState(null); 
   const [chapterIndex, setChapterIndex] = useState(null);
@@ -76,15 +76,11 @@ export default function ExamMode({ onExit }) {
   const typedBoxRef = useRef(null);
   const lastLineTopRef = useRef(0);
 
-  // --- UPDATED useEffect BLOCK START ---
   useEffect(() => {
     const container = passageRef.current;
     const activeEl = activeWordRef.current;
 
     if (container && activeEl) {
-      // getBoundingClientRect se hisaab lagate hain — offsetTop ki
-      // tarah container ke position: relative hone par depend nahi
-      // karta, isliye kabhi galat/bada number nahi deta.
       const containerRect = container.getBoundingClientRect();
       const activeRect = activeEl.getBoundingClientRect();
       const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
@@ -98,7 +94,6 @@ export default function ExamMode({ onExit }) {
       typedBoxRef.current.scrollTop = typedBoxRef.current.scrollHeight;
     }
   }, [state?.wordIndex]);
-  // --- UPDATED useEffect BLOCK END ---
 
   useEffect(() => {
     if (activeLayout === "krutidev" && state && !state.finished) {
@@ -245,23 +240,23 @@ export default function ExamMode({ onExit }) {
   if (!config) {
     return (
       <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
-        <p className="text-sm text-center text-white/60 mb-2">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
           Apna exam chuno — duration, backspace rule aur layout automatically set ho jayenge
         </p>
         {Object.entries(EXAM_CONFIGS).map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => selectExam(key)}
-            className="text-left px-4 py-3 rounded-xl text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white"
+            className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
           >
             <span className="font-medium">{cfg.label}</span>
-            <span className="ml-2 text-xs text-white/40">
+            <span className={`ml-2 text-xs ${t.textMuted}`}>
               {cfg.fullName} · {Math.round(cfg.durationSeconds / 60)} min
             </span>
           </button>
         ))}
         {onExit && (
-          <button onClick={onExit} className="mx-auto mt-2 text-sm text-white/40 underline">
+          <button onClick={onExit} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
             ← वापस जाएं
           </button>
         )}
@@ -273,19 +268,19 @@ export default function ExamMode({ onExit }) {
   if (needsLayoutChoice && !activeLayout) {
     return (
       <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
-        <p className="text-sm text-center text-white/60 mb-2">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
           {config.label} — apna keyboard layout chuno
         </p>
         {config.layouts.map((l) => (
           <button
             key={l}
             onClick={() => selectLayout(l)}
-            className="text-left px-4 py-3 rounded-xl text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white"
+            className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
           >
             <span className="font-medium">{LAYOUT_LABELS[l]}</span>
           </button>
         ))}
-        <button onClick={exitExam} className="mx-auto mt-2 text-sm text-white/40 underline">
+        <button onClick={exitExam} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
           ← दूसरा Exam चुनें
         </button>
       </div>
@@ -296,7 +291,7 @@ export default function ExamMode({ onExit }) {
   if (chapterIndex === null) {
     return (
       <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
-        <p className="text-sm text-center text-white/60 mb-2">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
           {config.label} ({LAYOUT_LABELS[activeLayout]}) — ek chapter चुनो
         </p>
         {chapters.map((chapter, idx) => {
@@ -305,19 +300,19 @@ export default function ExamMode({ onExit }) {
             <button
               key={chapter.id}
               onClick={() => startChapter(idx)}
-              className="text-left px-4 py-3 rounded-xl text-sm bg-white/5 border border-white/10 hover:bg-white/10 transition-all text-white"
+              className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
               style={{ fontFamily }}
             >
               <span className="font-medium">
                 {idx + 1}. {chapter.title}
               </span>
-              <span className="ml-2 text-xs text-white/40" style={{ fontFamily: "inherit" }}>
+              <span className={`ml-2 text-xs ${t.textMuted}`} style={{ fontFamily: "inherit" }}>
                 {wordCount} शब्द
               </span>
             </button>
           );
         })}
-        <button onClick={needsLayoutChoice ? backToLayoutChoice : exitExam} className="mx-auto mt-2 text-sm text-white/40 underline">
+        <button onClick={needsLayoutChoice ? backToLayoutChoice : exitExam} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
           ← वापस जाएं
         </button>
       </div>
@@ -330,7 +325,7 @@ export default function ExamMode({ onExit }) {
     : Math.round(state.durationMs / 1000);
   const formattedTime = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, "0")}`;
   const timeColor =
-    remainingSeconds <= 10 ? "text-red-400" : remainingSeconds <= 30 ? "text-yellow-400" : "text-green-400";
+    remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
 
   // ── SCREEN 4: Result ──
   if (state.finished) {
@@ -339,45 +334,45 @@ export default function ExamMode({ onExit }) {
 
     return (
       <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
-        <p className="text-sm uppercase tracking-widest text-white/40">
+        <p className={`text-sm uppercase tracking-widest ${t.textMuted}`}>
           {config.fullName} · {LAYOUT_LABELS[activeLayout]}
         </p>
         <div className="text-center">
-          <p className="text-8xl font-bold tabular-nums text-white">{netScore}</p>
-          <p className="text-xs uppercase tracking-widest mt-2 text-white/50">Net WPM</p>
+          <p className={`text-8xl font-bold tabular-nums ${t.textNormal}`}>{netScore}</p>
+          <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Net WPM</p>
         </div>
         <div className="flex gap-6 flex-wrap justify-center">
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-3xl font-bold text-white">{stats.grossWpm}</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Gross WPM</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.textNormal}`}>{stats.grossWpm}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Gross WPM</p>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-3xl font-bold text-white">{stats.accuracy}%</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Accuracy</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.textNormal}`}>{stats.accuracy}%</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Accuracy</p>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-3xl font-bold text-red-400">{stats.incorrectWords}</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Wrong Words</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.incorrect}`}>{stats.incorrectWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Wrong Words</p>
           </div>
         </div>
-        <p className="text-xs text-white/40 text-center max-w-md">
+        <p className={`text-xs ${t.textMuted} text-center max-w-md`}>
           Exact threshold apni exam ki official notification mein check karo — ye score sirf practice ke liye hai.
         </p>
         <div className="flex gap-4 flex-wrap justify-center">
           <button
             onClick={restartChapter}
-            className="px-8 py-3 rounded-xl font-bold bg-white text-black transition-all hover:scale-105"
+            className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${t.primaryButton}`}
           >
             फिर से कोशिश करें
           </button>
           <button
             onClick={backToChapterList}
-            className="px-8 py-3 rounded-xl text-sm text-white/60 border border-white/10 hover:bg-white/5 transition-all"
+            className={`px-8 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textMuted}`}
           >
             दूसरा Chapter चुनें
           </button>
           {onExit && (
-            <button onClick={onExit} className="px-8 py-3 rounded-xl text-sm text-white/40 underline">
+            <button onClick={onExit} className={`px-8 py-3 rounded-xl text-sm ${t.textMuted} underline`}>
               सामान्य Typing Test पर जाएं
             </button>
           )}
@@ -405,14 +400,14 @@ export default function ExamMode({ onExit }) {
         style={{ top: 0, left: 0, width: 1, height: 1 }}
       />
 
-      <p className="text-center text-xs text-white/40 uppercase tracking-wider">
+      <p className={`text-center text-xs ${t.textMuted} uppercase tracking-wider`}>
         {config.fullName} · {LAYOUT_LABELS[activeLayout]} — Backspace:{" "}
         {config.backspaceMode === "full" && "पूरी तरह Allowed"}
         {config.backspaceMode === "none" && "बंद"}
         {config.backspaceMode === "currentWordOnly" && "सिर्फ मौजूदा शब्द तक"}
         {config.backspaceMode === "currentPlusOneWord" && "मौजूदा + 1 पिछला शब्द"}
       </p>
-      <button onClick={backToChapterList} className="mx-auto text-xs text-white/30 underline">
+      <button onClick={backToChapterList} className={`mx-auto text-xs ${t.textMuted} underline`}>
         Chapter बदलें
       </button>
 
@@ -420,34 +415,39 @@ export default function ExamMode({ onExit }) {
         <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
       </div>
 
-      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl">
-        <p className="text-xs text-white/30 mb-2 uppercase tracking-wider">Passage</p>
+      <div className={`p-6 shadow-xl ${t.glassCard}`}>
+        <p className={`text-xs ${t.textMuted} mb-2 uppercase tracking-wider`}>Passage</p>
         <div
           ref={passageRef}
-          className="text-xl text-gray-300 leading-relaxed select-none overflow-y-auto hide-scrollbar flex flex-wrap gap-x-2"
+          className="text-xl leading-relaxed select-none overflow-y-auto hide-scrollbar flex flex-wrap gap-x-2"
           style={{ fontFamily, maxHeight: "7.5rem" }}
         >
-          {state.words.map((word, idx) => (
-            <span key={idx} ref={idx === state.wordIndex ? activeWordRef : null}>
-              {word}
-            </span>
-          ))}
+          <span className={t.untyped}>
+            {state.words.map((word, idx) => (
+              <span key={idx} ref={idx === state.wordIndex ? activeWordRef : null}>
+                {word}{" "}
+              </span>
+            ))}
+          </span>
         </div>
       </div>
 
-      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl">
-        <p className="text-xs text-white/30 mb-2 uppercase tracking-wider">आपकी टाइपिंग</p>
+      <div className={`p-6 shadow-xl ${t.glassCard}`}>
+        <p className={`text-xs ${t.textMuted} mb-2 uppercase tracking-wider`}>आपकी टाइपिंग</p>
         <div
           ref={typedBoxRef}
-          className="text-xl text-white leading-relaxed overflow-y-auto hide-scrollbar"
+          className={`text-xl leading-relaxed overflow-y-auto hide-scrollbar ${t.textNormal}`}
           style={{ fontFamily, maxHeight: "7.5rem" }}
         >
           {typedSoFar}
-          <span className="inline-block w-0.5 h-5 bg-white/70 animate-pulse ml-0.5 align-middle" />
+          <span
+            className="inline-block w-0.5 h-5 animate-pulse ml-0.5 align-middle"
+            style={{ backgroundColor: t.cursor }}
+          />
         </div>
       </div>
 
-      <button onClick={restartChapter} className="mx-auto text-sm text-gray-500 underline">
+      <button onClick={restartChapter} className={`mx-auto text-sm ${t.textMuted} underline`}>
         Reset
       </button>
     </div>

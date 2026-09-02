@@ -70,7 +70,7 @@ function encouragement(cpm) {
   return "🌱 रोज अभ्यास करते रहें!";
 }
 
-export default function HindiTypingTest() {
+export default function HindiTypingTest({ theme, themeStyles: t }) {
   const [mode, setMode] = useState("mangal"); // "mangal" | "gail" | "krutidev"
   const [showExam, setShowExam] = useState(false);
   const [testMode, setTestMode] = useState("time"); // "time" | "custom"
@@ -309,7 +309,7 @@ export default function HindiTypingTest() {
       : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
   if (showExam) {
-    return <ExamMode onExit={() => setShowExam(false)} />;
+    return <ExamMode onExit={() => setShowExam(false)} theme={theme} themeStyles={t} />;
   }
 
   // ── RESULTS SCREEN ──
@@ -318,60 +318,60 @@ export default function HindiTypingTest() {
     return (
       <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
         <div className="text-center">
-          <p className="text-8xl font-bold tabular-nums text-white">{stats.cpm}</p>
-          <p className="text-xs uppercase tracking-widest mt-2 text-white/50">Characters Per Minute</p>
+          <p className={`text-8xl font-bold tabular-nums ${t.textNormal}`}>{stats.cpm}</p>
+          <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Characters Per Minute</p>
         </div>
 
         <div className="flex gap-6 flex-wrap justify-center">
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-4xl font-bold text-white">{stats.wpm}</p>
-            <p className="text-xs uppercase text-white/50 mt-1">WPM</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.textNormal}`}>{stats.wpm}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>WPM</p>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-4xl font-bold text-white">{stats.accuracy}%</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Accuracy</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.textNormal}`}>{stats.accuracy}%</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Accuracy</p>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-4xl font-bold text-green-400">{stats.correctWords}</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Correct Words</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.correct}`}>{stats.correctWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Correct Words</p>
           </div>
-          <div className="text-center p-6 rounded-2xl border border-white/10 bg-white/5">
-            <p className="text-4xl font-bold text-red-400">{stats.incorrectWords}</p>
-            <p className="text-xs uppercase text-white/50 mt-1">Wrong Words</p>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.incorrect}`}>{stats.incorrectWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Wrong Words</p>
           </div>
         </div>
 
-        <div className="w-full max-w-2xl p-4 rounded-2xl border border-white/10 bg-white/5">
-          <p className="text-xs text-center text-white/40 mb-3 uppercase tracking-wider">
+        <div className={`w-full max-w-2xl p-4 ${t.glassCard}`}>
+          <p className={`text-xs text-center ${t.textMuted} mb-3 uppercase tracking-wider`}>
             असली परीक्षा जैसा स्कोर
           </p>
           <div className="flex gap-4 flex-wrap justify-center">
             <div className="text-center min-w-[100px]">
-              <p className="text-2xl font-bold text-white">{stats.grossWpm}</p>
-              <p className="text-[10px] text-white/40 mt-0.5">Gross WPM</p>
+              <p className={`text-2xl font-bold ${t.textNormal}`}>{stats.grossWpm}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Gross WPM</p>
             </div>
             <div className="text-center min-w-[100px]">
-              <p className="text-2xl font-bold text-blue-400">{stats.netWpmSSC}</p>
-              <p className="text-[10px] text-white/40 mt-0.5">Net WPM (SSC/CPCT)</p>
+              <p className="text-2xl font-bold text-blue-500">{stats.netWpmSSC}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Net WPM (SSC/CPCT)</p>
             </div>
             <div className="text-center min-w-[100px]">
-              <p className="text-2xl font-bold text-purple-400">{stats.netWpmRSMSSB}</p>
-              <p className="text-[10px] text-white/40 mt-0.5">Net WPM (RSMSSB)</p>
+              <p className="text-2xl font-bold text-purple-500">{stats.netWpmRSMSSB}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Net WPM (RSMSSB)</p>
             </div>
           </div>
         </div>
 
-        <div className="w-full p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
-          <p className="text-sm text-white/70" style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}>
+        <div className={`w-full p-4 text-center ${t.glassCard}`}>
+          <p className={t.textNormal} style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}>
             {encouragement(stats.cpm)}
           </p>
-          <p className="text-xs mt-1 text-white/40">CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
+          <p className={`text-xs mt-1 ${t.textMuted}`}>CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
         </div>
 
         <div className="flex gap-4 flex-wrap justify-center">
           <button
             onClick={() => reset()}
-            className="px-8 py-3 rounded-xl font-bold bg-white text-black transition-all hover:scale-105"
+            className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${t.primaryButton}`}
             style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
           >
             फिर से कोशिश करें
@@ -379,7 +379,7 @@ export default function HindiTypingTest() {
           <button
             onClick={() => handleDownloadPdf(stats)}
             disabled={downloadingPdf}
-            className="px-8 py-3 rounded-xl font-bold text-sm border border-white/20 text-white hover:bg-white/10 transition-all disabled:opacity-50"
+            className={`px-8 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50 ${t.glassButton} ${t.textNormal}`}
           >
             {downloadingPdf ? "तैयार हो रहा है..." : "📄 रिजल्ट डाउनलोड करें"}
           </button>
@@ -402,7 +402,7 @@ export default function HindiTypingTest() {
     : Math.round(state.durationMs / 1000);
   const formattedTime = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, "0")}`;
   const timeColor =
-    remainingSeconds <= 10 ? "text-red-400" : remainingSeconds <= 30 ? "text-yellow-400" : "text-green-400";
+    remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8" onClick={refocusHiddenInput}>
@@ -417,7 +417,7 @@ export default function HindiTypingTest() {
         <button
           onClick={() => handleSelectMode("mangal")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "mangal" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+            mode === "mangal" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
           }`}
         >
           Mangal (InScript)
@@ -425,7 +425,7 @@ export default function HindiTypingTest() {
         <button
           onClick={() => handleSelectMode("gail")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "gail" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+            mode === "gail" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
           }`}
         >
           Mangal (Remington GAIL)
@@ -433,7 +433,7 @@ export default function HindiTypingTest() {
         <button
           onClick={() => handleSelectMode("krutidev")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "krutidev" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+            mode === "krutidev" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
           }`}
         >
           Krutidev 010
@@ -441,7 +441,7 @@ export default function HindiTypingTest() {
       </div>
 
       {(mode === "krutidev" || mode === "gail") && (
-        <p className="text-center text-xs text-white/40">
+        <p className={`text-center text-xs ${t.textMuted}`}>
           विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
         </p>
       )}
@@ -450,7 +450,7 @@ export default function HindiTypingTest() {
         <button
           onClick={() => handleModeToggle("time")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            testMode === "time" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+            testMode === "time" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
           }`}
         >
           Time
@@ -458,14 +458,14 @@ export default function HindiTypingTest() {
         <button
           onClick={() => handleModeToggle("custom")}
           className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            testMode === "custom" ? "bg-white/20 text-white" : "bg-white/5 border border-white/10 text-white/60"
+            testMode === "custom" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
           }`}
         >
           Custom
         </button>
         <button
           onClick={() => setShowExam(true)}
-          className="px-4 py-1.5 rounded-lg text-sm transition-all bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 text-white"
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${t.glassButton} ${t.textMuted} hover:opacity-80`}
         >
           Exam
         </button>
@@ -473,11 +473,11 @@ export default function HindiTypingTest() {
 
       {testMode === "custom" && !customReady && (
         <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
-          <p className="text-sm text-center text-white/60">
+          <p className={`text-sm text-center ${t.textMuted}`}>
             Mangal ya Krutidev — jo bhi text paste karoge, hum khud pehchan lenge
           </p>
           <textarea
-            className="w-full h-32 rounded-xl p-4 text-sm resize-none outline-none bg-white/5 border border-white/10 text-white"
+            className={`w-full h-32 rounded-xl p-4 text-sm resize-none outline-none ${t.glassCard} ${t.textNormal}`}
             placeholder="Apna paragraph yahan paste karo..."
             value={customText}
             onChange={(e) => setCustomText(e.target.value)}
@@ -485,7 +485,7 @@ export default function HindiTypingTest() {
           <button
             onClick={handleStartCustom}
             disabled={customText.trim().length === 0}
-            className="mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 bg-white text-black disabled:opacity-30 disabled:hover:scale-100"
+            className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 ${t.primaryButton}`}
           >
             Start Typing →
           </button>
@@ -502,8 +502,8 @@ export default function HindiTypingTest() {
                   onClick={() => handleSelectTime(min)}
                   className={`px-3 py-1 rounded-lg text-xs transition-all flex flex-col items-center ${
                     selectedTime === min * 60
-                      ? "bg-white/20 text-white"
-                      : "bg-white/5 border border-white/10 text-white/60"
+                      ? `${t.glassButtonActive} ${t.textNormal}`
+                      : `${t.glassButton} ${t.textMuted}`
                   }`}
                 >
                   <span>{min} min</span>
@@ -519,7 +519,7 @@ export default function HindiTypingTest() {
             <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
           </div>
 
-          <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-xl">
+          <div className={`p-8 shadow-xl ${t.glassCard}`}>
             <div
               ref={passageContainerRef}
               className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
@@ -531,7 +531,7 @@ export default function HindiTypingTest() {
                   return (
                     <span
                       key={wIdx}
-                      className={result === "correct" ? "text-green-600" : "text-red-500 underline decoration-2"}
+                      className={result === "correct" ? t.correct : `${t.incorrect} underline decoration-2`}
                     >
                       {word}
                     </span>
@@ -545,24 +545,26 @@ export default function HindiTypingTest() {
                   return (
                     <span key={wIdx} ref={activeWordRef} className="inline-flex">
                       {spans.map((seg, sIdx) => {
-                        let className = "text-gray-400";
+                        let className = t.untyped;
+                        let style;
 
                         if (typed.length >= seg.end) {
                           const typedSlice = typed.slice(seg.start, seg.end);
-                          className = typedSlice === seg.text ? "text-green-600" : "text-red-500";
+                          className = typedSlice === seg.text ? t.correct : t.incorrect;
                         } else if (typed.length >= seg.start) {
-                          className = "text-gray-400 border-l-2 border-blue-500 animate-pulse";
+                          className = `${t.untyped} border-l-2 animate-pulse`;
+                          style = { borderColor: t.cursor };
                         }
 
                         return (
-                          <span key={sIdx} className={className}>
+                          <span key={sIdx} className={className} style={style}>
                             {seg.text}
                           </span>
                         );
                       })}
 
                       {typed.length > word.length && (
-                        <span className="text-red-500 bg-red-100 rounded px-0.5">
+                        <span className={`${t.incorrect} bg-red-500/10 rounded px-0.5`}>
                           {typed.slice(word.length)}
                         </span>
                       )}
@@ -571,7 +573,7 @@ export default function HindiTypingTest() {
                 }
 
                 return (
-                  <span key={wIdx} className="text-gray-300">
+                  <span key={wIdx} className={t.untyped}>
                     {word}
                   </span>
                 );
@@ -579,10 +581,10 @@ export default function HindiTypingTest() {
             </div>
           </div>
 
-          <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} />
+          <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} theme={theme} themeStyles={t} />
 
           {customNotice && (
-            <p className="text-center text-xs text-white/40">{customNotice}</p>
+            <p className={`text-center text-xs ${t.textMuted}`}>{customNotice}</p>
           )}
 
           {((nextKeyInfo?.altGr && mode === "mangal") ||
@@ -604,7 +606,7 @@ export default function HindiTypingTest() {
             </div>
           )}
 
-          <button onClick={() => reset()} className="mx-auto text-sm text-gray-500 underline">
+          <button onClick={() => reset()} className={`mx-auto text-sm underline ${t.textMuted}`}>
             Reset
           </button>
         </>
