@@ -24,7 +24,7 @@ const MIN_PLAYERS = 2;
 const TIME_OPTIONS = [1, 2, 3, 5, 10];
 
 export default function MultiplayerLobby({
-  theme, themeStyles, myId, connected,
+  theme, themeStyles: t, myId, connected,
   createRoom, joinRoom, error, roomState,
   startRace, leaveRoom, autoRoomCode
 }) {
@@ -51,7 +51,6 @@ export default function MultiplayerLobby({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for mobile/older browsers
       const el = document.createElement('textarea');
       el.value = roomState.code;
       document.body.appendChild(el);
@@ -88,15 +87,15 @@ export default function MultiplayerLobby({
     const canStart = playerCount >= MIN_PLAYERS;
 
     return (
-      <div className="max-w-lg mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100 space-y-5">
+      <div className={`max-w-lg mx-auto p-6 shadow-xl space-y-5 ${t.glassCard} ${t.textNormal}`}>
 
         {/* Room Code */}
         <div className="text-center">
-          <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Room Code</p>
+          <p className={`text-xs ${t.textMuted} uppercase tracking-widest mb-1`}>Room Code</p>
           <p className="text-5xl font-black tracking-widest text-yellow-500 font-mono">{roomState.code}</p>
-          <p className="text-xs text-zinc-500 mt-1">Share with friends to join!</p>
+          <p className={`text-xs ${t.textMuted} mt-1`}>Share with friends to join!</p>
           <div className="flex gap-2 justify-center mt-3">
-            <button onClick={copyCode} className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg transition">
+            <button onClick={copyCode} className={`text-xs px-4 py-2 rounded-lg transition ${t.glassButton} ${t.textMuted}`}>
               {copied ? '✅ Copied!' : '📋 Copy Code'}
             </button>
             <button onClick={copyLink} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition">
@@ -108,19 +107,19 @@ export default function MultiplayerLobby({
         {/* Players List */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400">Players</h3>
+            <h3 className={`text-sm font-bold uppercase tracking-wider ${t.textMuted}`}>Players</h3>
             <span className="text-xs font-mono text-yellow-400 font-bold">{playerCount}/{MAX_PLAYERS}</span>
           </div>
 
-          <div className="w-full bg-zinc-800 rounded-full h-1.5 mb-3">
+          <div className="w-full bg-white/10 rounded-full h-1.5 mb-3">
             <div className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${(playerCount / MAX_PLAYERS) * 100}%` }} />
           </div>
 
           <div className="space-y-2">
             {roomState.players?.map((player, idx) => (
-              <div key={player.id} className="flex items-center gap-3 bg-zinc-800 p-3 rounded-lg">
-                <span className="text-xs text-zinc-500 w-4">{idx + 1}</span>
+              <div key={player.id} className={`flex items-center gap-3 p-3 rounded-lg ${t.glassButton}`}>
+                <span className={`text-xs ${t.textMuted} w-4`}>{idx + 1}</span>
                 <span className="text-2xl">{player.emoji}</span>
                 <span className="font-bold flex-1">{player.name}</span>
                 {player.id === roomState.hostId && (
@@ -133,16 +132,16 @@ export default function MultiplayerLobby({
             ))}
 
             {Array.from({ length: MAX_PLAYERS - playerCount }).map((_, i) => (
-              <div key={`empty-${i}`} className="flex items-center gap-3 bg-zinc-800/40 p-3 rounded-lg border border-dashed border-zinc-700">
-                <span className="text-xs text-zinc-600 w-4">{playerCount + i + 1}</span>
+              <div key={`empty-${i}`} className={`flex items-center gap-3 p-3 rounded-lg border-dashed ${t.glassButton} opacity-60`}>
+                <span className={`text-xs ${t.textMuted} w-4`}>{playerCount + i + 1}</span>
                 <span className="text-2xl opacity-20">👤</span>
-                <span className="text-zinc-600 text-sm">Waiting for player...</span>
+                <span className={`${t.textMuted} text-sm`}>Waiting for player...</span>
               </div>
             ))}
           </div>
 
           {playerCount < MIN_PLAYERS && (
-            <p className="text-xs text-zinc-500 mt-2 text-center">
+            <p className={`text-xs ${t.textMuted} mt-2 text-center`}>
               ⏳ Need {MIN_PLAYERS - playerCount} more player{MIN_PLAYERS - playerCount > 1 ? 's' : ''} to start
             </p>
           )}
@@ -152,26 +151,26 @@ export default function MultiplayerLobby({
         {isHost && (
           <>
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">⏱️ Time Limit</h3>
+              <h3 className={`text-sm font-bold uppercase tracking-wider ${t.textMuted} mb-2`}>⏱️ Time Limit</h3>
               <div className="flex gap-2 flex-wrap">
-                {TIME_OPTIONS.map(t => (
-                  <button key={t} onClick={() => setTimeLimit(t)}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${timeLimit === t ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
-                    {t} min
+                {TIME_OPTIONS.map(min => (
+                  <button key={min} onClick={() => setTimeLimit(min)}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition ${timeLimit === min ? 'bg-yellow-500 text-black' : `${t.glassButton} ${t.textMuted}`}`}>
+                    {min} min
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-400 mb-2">📝 Race Text</h3>
+              <h3 className={`text-sm font-bold uppercase tracking-wider ${t.textMuted} mb-2`}>📝 Race Text</h3>
               <div className="flex gap-2 mb-3">
                 <button onClick={() => setUseCustom(false)}
-                  className={`px-3 py-1.5 rounded-lg text-xs transition ${!useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-xs transition ${!useCustom ? 'bg-yellow-500 text-black font-bold' : `${t.glassButton} ${t.textMuted}`}`}>
                   Preset
                 </button>
                 <button onClick={() => setUseCustom(true)}
-                  className={`px-3 py-1.5 rounded-lg text-xs transition ${useCustom ? 'bg-yellow-500 text-black font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-xs transition ${useCustom ? 'bg-yellow-500 text-black font-bold' : `${t.glassButton} ${t.textMuted}`}`}>
                   Custom
                 </button>
               </div>
@@ -179,7 +178,7 @@ export default function MultiplayerLobby({
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {PRESET_TEXTS.map(p => (
                     <button key={p.title} onClick={() => setSelectedText(p)}
-                      className={`w-full text-left px-4 py-3 rounded-xl text-sm transition ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}>
+                      className={`w-full text-left px-4 py-3 rounded-xl text-sm transition ${selectedText.title === p.title ? 'bg-yellow-500/20 border border-yellow-500/50 text-yellow-300' : `${t.glassButton} ${t.textMuted}`}`}>
                       <span className="font-medium">{p.title}</span>
                       <span className="ml-2 text-xs opacity-60">{p.text.split(' ').length} words</span>
                     </button>
@@ -188,7 +187,7 @@ export default function MultiplayerLobby({
               ) : (
                 <textarea value={customText} onChange={e => setCustomText(e.target.value)}
                   placeholder="Paste your paragraph here..."
-                  className="w-full h-28 bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm resize-none outline-none text-zinc-100 placeholder-zinc-600 focus:border-yellow-500" />
+                  className={`w-full h-28 rounded-xl p-3 text-sm resize-none outline-none focus:border-yellow-500 ${t.glassCard} ${t.textNormal}`} />
               )}
             </div>
           </>
@@ -202,7 +201,7 @@ export default function MultiplayerLobby({
               {!canStart ? `Need ${MIN_PLAYERS - playerCount} more player${MIN_PLAYERS - playerCount > 1 ? 's' : ''}` : `🏁 Start Race! (${timeLimit} min)`}
             </button>
           ) : (
-            <div className="w-full py-3 rounded-lg bg-zinc-800 text-zinc-400 text-center text-sm">
+            <div className={`w-full py-3 rounded-lg text-center text-sm ${t.glassButton} ${t.textMuted}`}>
               ⏳ Waiting for host to start...
             </div>
           )}
@@ -216,9 +215,9 @@ export default function MultiplayerLobby({
 
   // ── LOBBY ──
   return (
-    <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl text-zinc-100">
+    <div className={`max-w-md mx-auto p-6 shadow-xl ${t.glassCard} ${t.textNormal}`}>
       <h2 className="text-2xl font-black text-center mb-1 text-yellow-500">🏁 Multiplayer Race</h2>
-      <p className="text-xs text-zinc-500 text-center mb-5">2 to 5 players • Real-time race</p>
+      <p className={`text-xs ${t.textMuted} text-center mb-5`}>2 to 5 players • Real-time race</p>
 
       {autoRoomCode && (
         <div className="bg-blue-950/50 border border-blue-800 text-blue-300 p-3 rounded-lg text-sm text-center mb-4">
@@ -241,25 +240,25 @@ export default function MultiplayerLobby({
 
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Your Name</label>
+          <label className={`block text-xs font-bold uppercase tracking-wider ${t.textMuted} mb-2`}>Your Name</label>
           <input type="text" placeholder="Enter nickname..." maxLength={15} value={playerName}
             onChange={e => setPlayerName(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-yellow-500 transition" />
+            className={`w-full rounded-xl px-4 py-3 focus:outline-none focus:border-yellow-500 transition ${t.glassCard} ${t.textNormal}`} />
         </div>
 
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Avatar {playerEmoji}</label>
+          <label className={`block text-xs font-bold uppercase tracking-wider ${t.textMuted} mb-2`}>Avatar {playerEmoji}</label>
           <div className="grid grid-cols-4 gap-2">
             {emojis.map(emo => (
               <button key={emo} onClick={() => setPlayerEmoji(emo)}
-                className={`text-2xl p-2 rounded-xl transition ${playerEmoji === emo ? 'bg-yellow-500/20 border-2 border-yellow-500 scale-105' : 'bg-zinc-950 border border-zinc-800 opacity-60 hover:opacity-100'}`}>
+                className={`text-2xl p-2 rounded-xl transition ${playerEmoji === emo ? 'bg-yellow-500/20 border-2 border-yellow-500 scale-105' : `${t.glassCard} opacity-60 hover:opacity-100`}`}>
                 {emo}
               </button>
             ))}
           </div>
         </div>
 
-        <hr className="border-zinc-800" />
+        <hr className="border-white/10" />
 
         {!autoRoomCode && (
           <button onClick={() => createRoom(playerName, playerEmoji)} disabled={!playerName.trim()}
@@ -270,15 +269,15 @@ export default function MultiplayerLobby({
 
         {!autoRoomCode && (
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-zinc-800" />
-            <span className="text-xs text-zinc-600 font-bold uppercase">OR</span>
-            <div className="flex-1 h-px bg-zinc-800" />
+            <div className="flex-1 h-px bg-white/10" />
+            <span className={`text-xs ${t.textMuted} font-bold uppercase`}>OR</span>
+            <div className="flex-1 h-px bg-white/10" />
           </div>
         )}
 
         <input type="text" placeholder="Room Code (e.g. ABC123)" maxLength={8} value={roomCode}
           onChange={e => setRoomCode(e.target.value.toUpperCase())}
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-center font-mono font-bold tracking-widest text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-yellow-500 transition" />
+          className={`w-full rounded-xl px-4 py-3 text-center font-mono font-bold tracking-widest focus:outline-none focus:border-yellow-500 transition ${t.glassCard} ${t.textNormal}`} />
 
         <button onClick={() => joinRoom(roomCode, playerName, playerEmoji)}
           disabled={!playerName.trim() || !roomCode.trim()}

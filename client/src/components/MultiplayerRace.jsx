@@ -12,7 +12,7 @@ errorSound.volume = 0.12;
 finishSound.volume = 0.2;
 
 export default function MultiplayerRace({
-  theme, myId, roomState, raceText,
+  theme, themeStyles: t, myId, roomState, raceText,
   raceStarted, raceFinished, countdown,
   sendProgress, sendFinished, leaveRoom, resetRace,
   timeLimit = 120,
@@ -49,31 +49,16 @@ export default function MultiplayerRace({
   const words = raceText.trim().split(/\s+/).filter(Boolean);
   const totalWords = words.length;
 
-  const textColor = theme === 'dark' ? 'text-white' : theme === 'sepia' ? 'text-[#5a4a2e]' : 'text-gray-800';
-  const mutedColor = theme === 'dark' ? 'text-white/40' : theme === 'sepia' ? 'text-[#8a6e4a]' : 'text-gray-500';
-  const untypedColor = theme === 'dark' ? 'text-zinc-500' : theme === 'sepia' ? 'text-amber-700/40' : 'text-gray-300';
-  const correctColor = theme === 'dark' ? 'text-zinc-200' : theme === 'sepia' ? 'text-[#5a4a2e]' : 'text-gray-700';
-  const currentColor = theme === 'dark' ? 'text-yellow-400' : theme === 'sepia' ? 'text-amber-700 font-bold' : 'text-blue-600 font-bold';
-  const cursorColor = theme === 'dark' ? '#eab308' : theme === 'sepia' ? '#b8860b' : '#3b82f6';
-
-  const getGlass = () => {
-    if (theme === 'dark') return 'backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl';
-    if (theme === 'sepia') return 'backdrop-blur-xl bg-white/40 border border-amber-800/20 rounded-2xl';
-    return 'backdrop-blur-xl bg-white/60 border border-gray-300/50 rounded-2xl';
-  };
-
-  const getBtn = (active = false) => {
-    if (active) {
-      if (theme === 'dark') return 'bg-white text-black';
-      if (theme === 'sepia') return 'bg-[#5a4a2e] text-white';
-      return 'bg-gray-800 text-white';
-    }
-    return theme === 'dark'
-      ? 'backdrop-blur-sm bg-white/5 border border-white/10 text-white'
-      : theme === 'sepia'
-      ? 'backdrop-blur-sm bg-white/30 border border-amber-800/20 text-[#5a4a2e]'
-      : 'backdrop-blur-sm bg-white/50 border border-gray-300/40 text-gray-800';
-  };
+  // Reads directly from the shared theme (theme.js via App.jsx) — same
+  // source every other tool now uses, instead of its own local functions.
+  const textColor = t.textNormal;
+  const mutedColor = t.textMuted;
+  const untypedColor = t.untyped;
+  const correctColor = t.correct;
+  const currentColor = t.current;
+  const cursorColor = t.cursor;
+  const getGlass = () => t.glassCard;
+  const getBtn = (active = false) => (active ? t.primaryButton : `${t.glassButton} ${t.textNormal}`);
 
   // Calculate Net WPM (Typing Master style)
   // 🔒 Pass an endTime to FREEZE the calculation at that exact moment.
@@ -421,7 +406,7 @@ export default function MultiplayerRace({
   };
 
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
-  const timerColor = timeLeft > 30 ? 'text-green-400' : timeLeft > 10 ? 'text-yellow-400' : 'text-red-400 animate-pulse';
+  const timerColor = timeLeft > 30 ? t.timeSafe : timeLeft > 10 ? t.timeWarn : `${t.timeDanger} animate-pulse`;
 
   // Live stats — only used WHILE actively typing. Once finished, we always show
   // the frozen finishStats instead, never a re-calculated live value.
@@ -449,7 +434,7 @@ export default function MultiplayerRace({
       <div className="flex flex-col items-center gap-5 max-w-2xl mx-auto w-full py-4">
 
         {/* My result banner */}
-        <div className={`w-full p-4 rounded-2xl text-center ${didIWin ? 'bg-yellow-500/20 border border-yellow-500/50' : 'bg-white/5 border border-white/10'}`}>
+        <div className={`w-full p-4 rounded-2xl text-center ${didIWin ? 'bg-yellow-500/20 border border-yellow-500/50' : t.glassCard}`}>
           <p className="text-4xl mb-1">{didIWin ? '🏆' : myPosition === 2 ? '🥈' : myPosition === 3 ? '🥉' : '😔'}</p>
           <p className={`text-2xl font-black ${didIWin ? 'text-yellow-400' : textColor}`}>
             {didIWin ? 'You Won!' : `${myPosition}${myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : 'th'} Place`}
@@ -616,7 +601,7 @@ export default function MultiplayerRace({
                       const status = getCharStatus(wIndex, charIndex);
                       let color = untypedColor;
                       if (status === 'correct') color = correctColor;
-                      if (status === 'incorrect') color = 'text-red-400';
+                      if (status === 'incorrect') color = t.incorrect;
                       if (status === 'current') color = currentColor;
                       const showCursor = isActive && charIndex === input.length;
                       return (
