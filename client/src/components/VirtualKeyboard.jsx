@@ -1,4 +1,3 @@
-import { useLayoutEffect, useRef, useState } from "react";
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 
@@ -66,18 +65,6 @@ function widthPx(u) {
   return u * UNIT + (u - 1) * GAP;
 }
 
-// ✅ NEW: keyboard ki "natural" (bina scale kiye) total width aur height
-// ek hi baar nikaal lete hain — isi ke against hum shrink-scale karenge.
-function rowWidth(row) {
-  const keysWidth = row.reduce((sum, k) => sum + widthPx(k.u), 0);
-  const gaps = (row.length - 1) * GAP;
-  return keysWidth + gaps;
-}
-const NATURAL_WIDTH = Math.max(...ROWS.map(rowWidth));
-const KEY_HEIGHT = 46;
-const ROW_GAP = 6; // Tailwind gap-1.5 = 6px
-const NATURAL_HEIGHT = ROWS.length * KEY_HEIGHT + (ROWS.length - 1) * ROW_GAP;
-
 // mode: "mangal" | "krutidev" | "gail"
 // GAIL raw keystrokes are identical to Krutidev's — the same physical
 // key positions print the same Devanagari-looking glyphs on a real
@@ -100,42 +87,9 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
   // ASCII patterns instead, no Alt+numpad involved, so no banner for it.
   const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
 
-  // ✅ NEW: har device/screen pe keyboard apne container ke andar
-  // khud shrink hoke fit ho jaye — kabhi overflow/scrollbar na aaye.
-  const wrapperRef = useRef(null);
-  const [scale, setScale] = useState(1);
-
-  useLayoutEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-
-    function updateScale() {
-      const available = el.offsetWidth;
-      if (!available) return;
-      // Kabhi 1 se zyada scale nahi karenge — sirf zaroorat par chhota karenge.
-      const next = Math.min(1, available / NATURAL_WIDTH);
-      setScale(next);
-    }
-
-    updateScale();
-
-    const observer = new ResizeObserver(updateScale);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <div ref={wrapperRef} className={`rounded-2xl p-5 border ${t.keyboardPanel}`}>
-      <div
-        style={{
-          width: NATURAL_WIDTH,
-          height: NATURAL_HEIGHT * scale,
-          transform: `scale(${scale})`,
-          transformOrigin: "top center",
-          margin: "0 auto",
-        }}
-        className="flex flex-col gap-1.5 items-center"
-      >
+    <div className={`rounded-2xl p-5 border ${t.keyboardPanel} overflow-x-hidden`}>
+      <div className="flex flex-col gap-1.5 items-center">
         {ROWS.map((row, rIdx) => (
           <div key={rIdx} className="flex gap-1.5">
             {row.map((k) => {
@@ -154,7 +108,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                 return (
                   <div
                     key={code}
-                    style={{ width, height: KEY_HEIGHT }}
+                    style={{ width, height: 46 }}
                     className={[
                       "flex items-center justify-center rounded-lg text-[11px] font-medium select-none",
                       "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
@@ -184,7 +138,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
               return (
                 <div
                   key={code}
-                  style={{ width, height: KEY_HEIGHT }}
+                  style={{ width, height: 46 }}
                   className={[
                     "flex flex-col items-center justify-center rounded-lg leading-tight select-none",
                     "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
