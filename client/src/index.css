@@ -15,20 +15,17 @@
 
 @import 'tailwindcss';
 
-/* ✅ SAFETY NET — kahin se bhi koi element overflow ho,
-   ye use hone nahi degi. Professional sites isi tarah
-   baseline pe overflow rokte hain. */
-html, body {
-  overflow-x: hidden;
-  max-width: 100vw;
-}
-
-*, *::before, *::after {
-  box-sizing: border-box;
-}
-
 @theme {
   --font-mono: 'Source Code Pro', ui-monospace, monospace;
+}
+
+html, body {
+  /* Safety net: if any element ever ends up wider than the screen, the
+     page stays put instead of silently shifting sideways and hiding
+     content off-screen. Doesn't fix a too-wide element by itself, but
+     stops it from taking the whole page down with it. */
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {

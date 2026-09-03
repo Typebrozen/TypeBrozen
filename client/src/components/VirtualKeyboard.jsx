@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 
@@ -72,6 +73,34 @@ function widthPx(u) {
 // typists). So for rendering purposes GAIL behaves exactly like
 // Krutidev — only Mangal is structurally different.
 export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, themeStyles: t }) {
+  // Fixed pixel key sizes (above) mean the keyboard has one "natural"
+  // width. On a screen too narrow for that, instead of letting it get
+  // clipped, we shrink the WHOLE keyboard proportionally to fit — like
+  // zooming a photo to fit a frame, not cropping it.
+  const outerRef = useRef(null);
+  const innerRef = useRef(null);
+  const [fit, setFit] = useState({ scale: 1, height: undefined });
+
+  useEffect(() => {
+    function updateFit() {
+      if (!outerRef.current || !innerRef.current) return;
+      const available = outerRef.current.clientWidth;
+      const naturalWidth = innerRef.current.scrollWidth;
+      const naturalHeight = innerRef.current.scrollHeight;
+      const scale = naturalWidth > available ? available / naturalWidth : 1;
+      setFit({ scale, height: naturalHeight * scale });
+    }
+
+    updateFit();
+    const ro = new ResizeObserver(updateFit);
+    if (outerRef.current) ro.observe(outerRef.current);
+    window.addEventListener("resize", updateFit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateFit);
+    };
+  }, []);
+
   const isRawGlyphMode = mode === "krutidev" || mode === "gail";
   const glyphFontFamily = isRawGlyphMode
     ? "'Kruti Dev 010', sans-serif"
@@ -88,7 +117,12 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
   const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
 
   return (
-    <div className={`rounded-2xl p-5 border ${t.keyboardPanel} overflow-x-hidden`}>
+    <div ref={outerRef} className={`rounded-2xl p-5 border ${t.keyboardPanel} overflow-hidden`}>
+      <div style={{ height: fit.height }}>
+        <div
+          ref={innerRef}
+          style={{ transform: `scale(${fit.scale})`, transformOrigin: "top center", width: "max-content", margin: "0 auto" }}
+        >
       <div className="flex flex-col gap-1.5 items-center">
         {ROWS.map((row, rIdx) => (
           <div key={rIdx} className="flex gap-1.5">
@@ -185,6 +219,8 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
             })}
           </div>
         ))}
+      </div>
+        </div>
       </div>
     </div>
   );
