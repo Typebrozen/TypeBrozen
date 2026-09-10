@@ -199,6 +199,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         },
         words: state.words.slice(0, state.wordIndex),
         typedHistory: state.typedHistory.slice(0, state.wordIndex),
+        wordResults: state.wordResults.slice(0, state.wordIndex),
         mode,
         filename: `TypeHanuman-Report-${Date.now()}.pdf`,
       });

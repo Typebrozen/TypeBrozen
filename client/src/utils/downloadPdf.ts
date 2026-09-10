@@ -1,16 +1,50 @@
 // ======================================================
 // PDF Download — branded, vector-text result report
 // ======================================================
+// Passage ke saare words — chahe live-typing InScript mein hui
+// ho, GAIL mein, ya Kruti Dev mein — PDF mein hamesha KrutiDev
+// font se hi render hote hain. Wajah: Kruti Dev font ka har
+// character independent hota hai (koi matra-reordering nahi
+// chahiye), isliye jsPDF (jo Devanagari-shaping nahi jaanta)
+// mein bhi kabhi nahi tootta — GAIL/Krutidev mein already yahi
+// wajah se perfect kaam kar raha hai. InScript input ko is fix
+// ke liye seedha uni2kru() se Kruti-Dev-raw mein convert kar
+// dete hain — sirf PDF ke liye, live typing bilkul InScript hi
+// rehti hai, user ko iska pata bhi nahi chalta.
+// ======================================================
 
 import jsPDF from "jspdf";
 import { NOTO_DEVANAGARI_BASE64 } from "./devanagariFont";
 import { KRUTIDEV_BASE64 } from "./krutiDevFont";
-import { diffWord } from "../engine/wordDiff";
+import { isWordCorrect } from "../engine/wordDiff";
+import { uni2kru } from "../engine/uni2kru";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
 const MARGIN = 15;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+
+const CHHOTI_I = "\u093F";
+const HALANT = "\u094D";
+
+// Header/labels ke liye — ye chhote static phrases hain (koi user-typed
+// content nahi), inmein "ि" kabhi nahi aata abhi, lekin future-safety
+// ke liye reorder-guard rakha hai.
+function reorderChhotiI(text: string): string {
+  const chars = text.split("");
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] === CHHOTI_I) {
+      let j = i - 1;
+      while (j > 0 && chars[j - 1] === HALANT) {
+        j -= 2;
+      }
+      if (j < 0) j = 0;
+      chars.splice(i, 1);
+      chars.splice(j, 0, CHHOTI_I);
+    }
+  }
+  return chars.join("");
+}
 
 function registerFonts(pdf: jsPDF) {
   pdf.addFileToVFS("NotoSansDevanagari.ttf", NOTO_DEVANAGARI_BASE64);
@@ -19,8 +53,12 @@ function registerFonts(pdf: jsPDF) {
   pdf.addFont("KrutiDev010.ttf", "KrutiDev010", "normal");
 }
 
-function passageFontFor(mode: string): string {
-  return mode === "krutidev" || mode === "gail" ? "KrutiDev010" : "NotoDevanagari";
+// Passage ke liye ab HAMESHA Kruti Dev font — mode kuch bhi ho.
+function displayWordFor(word: string, mode: string): string {
+  if (mode === "krutidev" || mode === "gail") {
+    return word; // already raw Kruti-Dev-ASCII
+  }
+  return uni2kru(word); // InScript ka Unicode word -> Kruti-Dev-raw
 }
 
 export interface PdfReportStats {
@@ -38,6 +76,7 @@ export interface PdfReportData {
   stats: PdfReportStats;
   words: string[];
   typedHistory: (string | null)[];
+  wordResults: (null | "correct" | "incorrect")[];
   mode: string;
   filename: string;
 }
@@ -53,7 +92,7 @@ function drawHeader(pdf: jsPDF, meta: string): number {
   pdf.setTextColor(255, 255, 255);
   pdf.text("Type", MARGIN, 16);
   const typeWidth = pdf.getTextWidth("Type");
-  pdf.setTextColor(250, 204, 21); // yellow-400
+  pdf.setTextColor(250, 204, 21);
   pdf.text("Hanuman", MARGIN + typeWidth, 16);
 
   pdf.setFont("helvetica", "normal");
@@ -69,7 +108,6 @@ function drawHeader(pdf: jsPDF, meta: string): number {
   return bandHeight + 14;
 }
 
-// ── Big centered speed number + skill gauge (inspired by typing-test sites) ──
 function skillLabel(wpm: number): { label: string; color: [number, number, number] } {
   if (wpm >= 80) return { label: "Pro", color: [22, 163, 74] };
   if (wpm >= 60) return { label: "Fast", color: [34, 197, 94] };
@@ -86,12 +124,11 @@ function drawSpeedSection(pdf: jsPDF, netWpm: number, startY: number): number {
   pdf.setTextColor(20, 20, 20);
   pdf.text(String(netWpm), PAGE_WIDTH / 2, startY, { align: "center" });
 
-  pdf.setFont("helvetica", "normal");
+  pdf.setFont("NotoDevanagari", "normal");
   pdf.setFontSize(9);
   pdf.setTextColor(130, 130, 130);
-  pdf.text("NET WPM (आपकी असली स्पीड)", PAGE_WIDTH / 2, startY + 6, { align: "center" });
+  pdf.text(reorderChhotiI("NET WPM (आपकी असली स्पीड)"), PAGE_WIDTH / 2, startY + 6, { align: "center" });
 
-  // Skill badge
   const badgeY = startY + 12;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
@@ -104,7 +141,6 @@ function drawSpeedSection(pdf: jsPDF, netWpm: number, startY: number): number {
   pdf.setTextColor(255, 255, 255);
   pdf.text(badgeText, PAGE_WIDTH / 2, badgeY + 5.5, { align: "center" });
 
-  // Gauge bar
   const gaugeY = badgeY + 15;
   const gaugeX = MARGIN + 20;
   const gaugeWidth = CONTENT_WIDTH - 40;
@@ -127,7 +163,6 @@ function drawSpeedSection(pdf: jsPDF, netWpm: number, startY: number): number {
     bx += bandW;
   });
 
-  // Marker pointer
   const clampedWpm = Math.min(netWpm, 100);
   const markerX = gaugeX + (clampedWpm / 100) * gaugeWidth;
   pdf.setFillColor(20, 20, 20);
@@ -136,7 +171,6 @@ function drawSpeedSection(pdf: jsPDF, netWpm: number, startY: number): number {
   return gaugeY + 16;
 }
 
-// ── Stats cards row ──
 function drawStatsRow(pdf: jsPDF, stats: PdfReportStats, startY: number): number {
   const boxes: { label: string; value: string | number; color: [number, number, number] }[] = [
     { label: "Typing Speed", value: `${stats.wpm} WPM`, color: [20, 20, 20] },
@@ -171,19 +205,6 @@ function drawStatsRow(pdf: jsPDF, stats: PdfReportStats, startY: number): number
   return startY + boxHeight + 12;
 }
 
-function mergeRuns(segments: { text: string; correct: boolean }[]) {
-  const runs: { text: string; correct: boolean }[] = [];
-  for (const seg of segments) {
-    const last = runs[runs.length - 1];
-    if (last && last.correct === seg.correct) {
-      last.text += seg.text;
-    } else {
-      runs.push({ text: seg.text, correct: seg.correct });
-    }
-  }
-  return runs;
-}
-
 export function downloadResultPdf(data: PdfReportData): void {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   registerFonts(pdf);
@@ -192,36 +213,36 @@ export function downloadResultPdf(data: PdfReportData): void {
   cursorY = drawSpeedSection(pdf, data.stats.netWpm, cursorY + 10);
   cursorY = drawStatsRow(pdf, data.stats, cursorY);
 
-  // ── Passage heading ──
-  pdf.setFont("helvetica", "bold");
+  pdf.setFont("NotoDevanagari", "normal");
   pdf.setFontSize(10);
   pdf.setTextColor(40, 40, 40);
-  pdf.text("शब्द-दर-शब्द विवरण", MARGIN, cursorY);
+  const headingText = reorderChhotiI("शब्द-दर-शब्द विवरण");
+  pdf.text(headingText, MARGIN, cursorY);
+  const headingWidth = pdf.getTextWidth(headingText);
 
-  pdf.setFont("helvetica", "normal");
+  pdf.setFont("NotoDevanagari", "normal");
   pdf.setFontSize(7.5);
   pdf.setTextColor(150, 150, 150);
-  pdf.text("(गलत टाइप किए अक्षर लाल रंग में दिखाए गए हैं)", MARGIN + pdf.getTextWidth("शब्द-दर-शब्द विवरण") + 3, cursorY);
+  pdf.text(reorderChhotiI("(गलत शब्द लाल रंग में दिखाए गए हैं)"), MARGIN + headingWidth + 3, cursorY);
   cursorY += 8;
 
   const boxTopY = cursorY;
   cursorY += 6;
 
-  const passageFont = passageFontFor(data.mode);
   const fontSize = 12.5;
   const lineHeight = 8;
   const spaceWidth = 2.2;
 
-  pdf.setFont(passageFont, "normal");
+  // Passage ab hamesha KrutiDev010 font se — kisi bhi mode mein.
+  pdf.setFont("KrutiDev010", "normal");
   pdf.setFontSize(fontSize);
 
   let cursorX = MARGIN + 4;
 
   data.words.forEach((word, idx) => {
-    const typed = data.typedHistory[idx];
-    const segments = diffWord(word, typed, data.mode);
-    const runs = mergeRuns(segments);
-    const wordWidth = runs.reduce((sum, run) => sum + pdf.getTextWidth(run.text), 0);
+    const correct = isWordCorrect(data.wordResults[idx]);
+    const displayWord = displayWordFor(word, data.mode);
+    const wordWidth = pdf.getTextWidth(displayWord);
 
     if (cursorY > PAGE_HEIGHT - MARGIN - 10) {
       pdf.addPage();
@@ -238,13 +259,9 @@ export function downloadResultPdf(data: PdfReportData): void {
       }
     }
 
-    runs.forEach((run) => {
-      pdf.setTextColor(run.correct ? 30 : 220, run.correct ? 30 : 38, run.correct ? 30 : 38);
-      pdf.text(run.text, cursorX, cursorY);
-      cursorX += pdf.getTextWidth(run.text);
-    });
-
-    cursorX += spaceWidth;
+    pdf.setTextColor(correct ? 30 : 220, correct ? 30 : 38, correct ? 30 : 38);
+    pdf.text(displayWord, cursorX, cursorY);
+    cursorX += wordWidth + spaceWidth;
   });
 
   const boxBottomY = cursorY + lineHeight - 2;
@@ -252,7 +269,6 @@ export function downloadResultPdf(data: PdfReportData): void {
   pdf.setDrawColor(225, 225, 225);
   pdf.roundedRect(MARGIN, boxTopY, CONTENT_WIDTH, boxBottomY - boxTopY, 2, 2, "S");
 
-  // ── Footer ──
   pdf.setDrawColor(230, 230, 230);
   pdf.line(MARGIN, PAGE_HEIGHT - 14, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 14);
   pdf.setFont("helvetica", "normal");
