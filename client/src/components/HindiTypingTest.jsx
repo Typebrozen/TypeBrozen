@@ -199,7 +199,6 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         },
         words: state.words.slice(0, state.wordIndex),
         typedHistory: state.typedHistory.slice(0, state.wordIndex),
-        wordResults: state.wordResults.slice(0, state.wordIndex),
         mode,
         filename: `TypeHanuman-Report-${Date.now()}.pdf`,
       });
@@ -406,7 +405,11 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8" onClick={refocusHiddenInput}>
+    <div
+      className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8 justify-center"
+      style={{ minHeight: "calc(100vh - 6rem)" }}
+      onClick={refocusHiddenInput}
+    >
       <input
         ref={hiddenInputRef}
         tabIndex={-1}
