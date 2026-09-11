@@ -127,7 +127,22 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col px-4 pb-6">
+      {/*
+        Page shell: [gutter] [content, capped width] [gutter].
+        On phones/small laptops there's no room for gutters, so they
+        shrink to zero and content gets the full screen — nothing wasted,
+        nothing cut off. On a big monitor or TV, content stays a
+        comfortable, readable width in the center, and the leftover space
+        on both sides is exactly where future ad slots go — no rework
+        needed later, just fill those columns when ready.
+      */}
+      <main
+        className="flex-1 grid"
+        style={{ gridTemplateColumns: "minmax(0,1fr) min(100%, 64rem) minmax(0,1fr)" }}
+      >
+        <div aria-hidden="true" />
+
+        <div className="flex flex-col px-4 pb-6 min-w-0">
 
         {/* Typing Pages */}
         {page === 'typing' && language === 'en' && (
@@ -151,7 +166,7 @@ export default function App() {
 
         {page === 'multiplayer' && isInRace && (
           <MultiplayerRace
-            theme={theme} myId={myId} roomState={roomState}
+            theme={theme} themeStyles={t} myId={myId} roomState={roomState}
             raceText={raceText} raceStarted={raceStarted}
             raceFinished={raceFinished} countdown={countdown}
             sendProgress={sendProgress} sendFinished={sendFinished}
@@ -159,6 +174,9 @@ export default function App() {
             timeLimit={timeLimit}
           />
         )}
+        </div>
+
+        <div aria-hidden="true" />
       </main>
     </div>
   );
