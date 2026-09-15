@@ -338,7 +338,7 @@ export default function ExamMode({ onExit, theme, themeStyles: t }) {
           {config.fullName} · {LAYOUT_LABELS[activeLayout]}
         </p>
         <div className="text-center">
-          <p className={`text-8xl font-bold tabular-nums ${t.textNormal}`}>{netScore}</p>
+          <p className={`text-[clamp(3rem,10vw,6rem)] font-bold tabular-nums ${t.textNormal}`}>{netScore}</p>
           <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Net WPM</p>
         </div>
         <div className="flex gap-6 flex-wrap justify-center">

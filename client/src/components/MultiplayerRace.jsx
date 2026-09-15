@@ -417,7 +417,7 @@ export default function MultiplayerRace({
     return (
       <div className="flex flex-col items-center justify-center gap-6 min-h-[400px]">
         <p className={`text-xl font-medium ${mutedColor}`}>Race starting in...</p>
-        <p className={`text-9xl font-bold tabular-nums ${textColor}`}>{countdown}</p>
+        <p className={`text-[clamp(4rem,15vw,8rem)] font-bold tabular-nums ${textColor}`}>{countdown}</p>
         <p className={`text-sm ${mutedColor}`}>Get ready to type!</p>
       </div>
     );

@@ -208,37 +208,10 @@ export default function TypingTest({ theme, themeStyles: t }) {
 
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
 
-  const getThemeColors = () => {
-    if (theme === 'dark') return {
-      untyped: 'text-zinc-500', correct: 'text-zinc-200',
-      incorrect: 'text-red-400', current: 'text-yellow-400',
-      cursor: '#eab308',
-      glassCard: 'backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl',
-      glassButton: 'backdrop-blur-sm bg-white/5 border border-white/10 hover:bg-white/10',
-      glassButtonActive: 'backdrop-blur-sm bg-white/20 border border-white/30',
-      textMuted: 'text-white/40', textNormal: 'text-white',
-    };
-    if (theme === 'sepia') return {
-      untyped: 'text-amber-700/40', correct: 'text-[#5a4a2e]',
-      incorrect: 'text-red-600', current: 'text-amber-700 font-bold',
-      cursor: '#b8860b',
-      glassCard: 'backdrop-blur-xl bg-white/40 border border-amber-800/20 rounded-2xl',
-      glassButton: 'backdrop-blur-sm bg-white/30 border border-amber-800/20 hover:bg-white/50',
-      glassButtonActive: 'backdrop-blur-sm bg-amber-100/50 border border-amber-700/30',
-      textMuted: 'text-[#8a6e4a]', textNormal: 'text-[#5a4a2e]',
-    };
-    return {
-      untyped: 'text-gray-300', correct: 'text-gray-700',
-      incorrect: 'text-red-500', current: 'text-blue-600 font-bold',
-      cursor: '#3b82f6',
-      glassCard: 'backdrop-blur-xl bg-white/60 border border-gray-300/50 rounded-2xl',
-      glassButton: 'backdrop-blur-sm bg-white/50 border border-gray-300/40 hover:bg-white/70',
-      glassButtonActive: 'backdrop-blur-sm bg-gray-200/70 border border-gray-400/50',
-      textMuted: 'text-gray-500', textNormal: 'text-gray-800',
-    };
-  };
-
-  const colors = getThemeColors();
+  // Reads directly from the shared theme (theme.js via App.jsx) instead of
+  // defining its own copy — this file's colors and Hindi's now come from
+  // the exact same place.
+  const colors = t;
 
   if (loading && mode !== 'custom') return <p className="opacity-50 text-center py-20">Loading words...</p>;
 
@@ -258,7 +231,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
           </div>
         )}
         <div className="text-center">
-          <p className={`text-8xl sm:text-9xl font-bold tabular-nums ${
+          <p className={`text-[clamp(3rem,10vw,7rem)] font-bold tabular-nums ${
             theme === 'dark' ? 'text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400'
             : theme === 'sepia' ? 'text-transparent bg-clip-text bg-gradient-to-b from-[#5a4a2e] to-[#a0906e]'
             : 'text-transparent bg-clip-text bg-gradient-to-b from-gray-800 to-gray-400'
@@ -393,7 +366,6 @@ export default function TypingTest({ theme, themeStyles: t }) {
           </div>
 
           <div className="relative">
-            {/* ✅ FIXED: overflow-hidden instead of overflow-y-auto - No scrollbar, text stays inside */}
             <div ref={containerRef} className={`h-80 overflow-hidden rounded-2xl p-8 shadow-xl ${colors.glassCard}`} onClick={() => inputRef.current?.focus()} role="presentation">
               <div className={`text-3xl leading-loose select-none tracking-wide font-mono ${colors.textNormal}`}>
                 {words.map((word, wIndex) => (

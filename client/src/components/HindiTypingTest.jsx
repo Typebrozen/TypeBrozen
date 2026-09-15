@@ -318,7 +318,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     return (
       <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
         <div className="text-center">
-          <p className={`text-8xl font-bold tabular-nums ${t.textNormal}`}>{stats.cpm}</p>
+          <p className={`text-[clamp(3rem,10vw,6rem)] font-bold tabular-nums ${t.textNormal}`}>{stats.cpm}</p>
           <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Characters Per Minute</p>
         </div>
 
