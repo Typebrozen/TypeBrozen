@@ -405,9 +405,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
 
   return (
+    // Vertical centering only kicks in on larger screens (lg: = 1024px+),
+    // where there's genuinely spare room above/below. On phones/small
+    // screens, content just flows normally top-to-bottom — scrolling
+    // down always reveals everything, nothing hides above the fold.
     <div
-      className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8 justify-center"
-      style={{ minHeight: "calc(100vh - 6rem)" }}
+      className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8 lg:justify-center lg:min-h-[calc(100vh-6rem)]"
       onClick={refocusHiddenInput}
     >
       <input
