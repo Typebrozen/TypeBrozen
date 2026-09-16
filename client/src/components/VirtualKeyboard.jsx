@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
 
-const UNIT = 42;
-const GAP = 6;
-
+// Key sizes are computed purely by CSS clamp() — never JavaScript
+// measurement. This is deliberate: clamp() is resolved instantly and
+// reliably by the browser on every device, with no timing/mounting race
+// conditions the way JS-measured ResizeObserver-based scaling can have
+// on some real phones. The keyboard will always fit, shrinking smoothly
+// as the screen gets narrower, down to a defined minimum size.
 const ROW_1 = [
   { code: "Backquote", u: 1 }, { code: "Digit1", u: 1 }, { code: "Digit2", u: 1 },
   { code: "Digit3", u: 1 }, { code: "Digit4", u: 1 }, { code: "Digit5", u: 1 },
@@ -62,8 +64,10 @@ const FUNCTION_LABELS = {
   AltRight: "Alt",
 };
 
-function widthPx(u) {
-  return u * UNIT + (u - 1) * GAP;
+// Returns a CSS calc() string — resolved natively by the browser, using
+// the --kb-unit / --kb-gap custom properties set on the outer container.
+function widthCss(u) {
+  return `calc(var(--kb-unit) * ${u} + var(--kb-gap) * ${u - 1})`;
 }
 
 // mode: "mangal" | "krutidev" | "gail"
@@ -73,34 +77,6 @@ function widthPx(u) {
 // typists). So for rendering purposes GAIL behaves exactly like
 // Krutidev — only Mangal is structurally different.
 export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, themeStyles: t }) {
-  // Fixed pixel key sizes (above) mean the keyboard has one "natural"
-  // width. On a screen too narrow for that, instead of letting it get
-  // clipped, we shrink the WHOLE keyboard proportionally to fit — like
-  // zooming a photo to fit a frame, not cropping it.
-  const outerRef = useRef(null);
-  const innerRef = useRef(null);
-  const [fit, setFit] = useState({ scale: 1, height: undefined });
-
-  useEffect(() => {
-    function updateFit() {
-      if (!outerRef.current || !innerRef.current) return;
-      const available = outerRef.current.clientWidth;
-      const naturalWidth = innerRef.current.scrollWidth;
-      const naturalHeight = innerRef.current.scrollHeight;
-      const scale = naturalWidth > available ? available / naturalWidth : 1;
-      setFit({ scale, height: naturalHeight * scale });
-    }
-
-    updateFit();
-    const ro = new ResizeObserver(updateFit);
-    if (outerRef.current) ro.observe(outerRef.current);
-    window.addEventListener("resize", updateFit);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", updateFit);
-    };
-  }, []);
-
   const isRawGlyphMode = mode === "krutidev" || mode === "gail";
   const glyphFontFamily = isRawGlyphMode
     ? "'Kruti Dev 010', sans-serif"
@@ -117,18 +93,26 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
   const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
 
   return (
-    <div ref={outerRef} className={`rounded-2xl p-5 border ${t.keyboardPanel} overflow-hidden`}>
-      <div style={{ height: fit.height }}>
-        <div
-          ref={innerRef}
-          style={{ transform: `scale(${fit.scale})`, transformOrigin: "top center", width: "max-content", margin: "0 auto" }}
-        >
-      <div className="flex flex-col gap-1.5 items-center">
+    <div
+      className={`rounded-2xl p-3 sm:p-5 border ${t.keyboardPanel} overflow-hidden`}
+      style={{
+        // These three custom properties are the ONLY place key sizing is
+        // controlled. Never below a comfortable minimum, never above the
+        // original desktop size — everything between scales with the
+        // actual screen width, purely via CSS, on every device.
+        "--kb-unit": "clamp(15px, 4.4vw, 42px)",
+        "--kb-gap": "clamp(2px, 0.7vw, 6px)",
+        "--kb-height": "clamp(30px, 8.5vw, 46px)",
+        "--kb-font-base": "clamp(9px, 2.6vw, 15px)",
+        "--kb-font-small": "clamp(6px, 1.6vw, 9px)",
+      }}
+    >
+      <div className="flex flex-col gap-1.5 items-center w-max mx-auto">
         {ROWS.map((row, rIdx) => (
           <div key={rIdx} className="flex gap-1.5">
             {row.map((k) => {
               const { code, u } = k;
-              const width = widthPx(u);
+              const width = widthCss(u);
 
               if (FUNCTION_KEYS.has(code)) {
                 const isShiftHighlight =
@@ -142,9 +126,9 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                 return (
                   <div
                     key={code}
-                    style={{ width, height: 46 }}
+                    style={{ width, height: "var(--kb-height)", fontSize: "var(--kb-font-small)" }}
                     className={[
-                      "flex items-center justify-center rounded-lg text-[11px] font-medium select-none",
+                      "flex items-center justify-center rounded-lg font-medium select-none",
                       "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
                       active
                         ? "bg-gradient-to-b from-blue-400 to-blue-600 border-blue-700 text-white shadow-[0_0_14px_rgba(59,130,246,0.8)]"
@@ -172,7 +156,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
               return (
                 <div
                   key={code}
-                  style={{ width, height: 46 }}
+                  style={{ width, height: "var(--kb-height)" }}
                   className={[
                     "flex flex-col items-center justify-center rounded-lg leading-tight select-none",
                     "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
@@ -183,7 +167,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                 >
                   <span
                     style={{
-                      fontSize: isActiveShift ? 15 : 9,
+                      fontSize: isActiveShift ? "var(--kb-font-base)" : "var(--kb-font-small)",
                       fontWeight: isActiveShift ? "bold" : "normal",
                       opacity: isActiveAltGr ? 0.1 : isActiveShift ? 1 : 0.55,
                       fontFamily: glyphFontFamily,
@@ -193,7 +177,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                   </span>
                   <span
                     style={{
-                      fontSize: isActiveShift ? 9 : 15,
+                      fontSize: isActiveShift ? "var(--kb-font-small)" : "var(--kb-font-base)",
                       fontWeight: isActiveBase ? "bold" : "normal",
                       opacity: isActiveShift ? 0.4 : 1,
                       fontFamily: glyphFontFamily,
@@ -204,7 +188,7 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                   {nuktaGlyph && (
                     <span
                       style={{
-                        fontSize: isActiveAltGr ? 12 : 8,
+                        fontSize: isActiveAltGr ? "var(--kb-font-base)" : "var(--kb-font-small)",
                         fontWeight: isActiveAltGr ? "bold" : "normal",
                         opacity: isActiveAltGr ? 1 : 0.4,
                         color: "#facc15",
@@ -219,8 +203,6 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
             })}
           </div>
         ))}
-      </div>
-        </div>
       </div>
     </div>
   );
