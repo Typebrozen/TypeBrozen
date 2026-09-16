@@ -58,10 +58,69 @@ export default function App() {
   return (
     <div className={`min-h-screen font-mono flex flex-col ${t.bg} ${t.text}`}>
 
+      {/* Logo animations: continuous glow, one-time bounce-in on load, hover scale on "Hanuman" */}
+      <style>{`
+        @keyframes typeGlow {
+          0%, 100% {
+            text-shadow: 0 0 4px rgba(255,255,255,0.6), 0 0 10px rgba(255,255,255,0.35);
+          }
+          50% {
+            text-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 22px rgba(255,255,255,0.55);
+          }
+        }
+        @keyframes hanumanGlow {
+          0%, 100% {
+            text-shadow: 0 0 2px rgba(234,179,8,0.35), 0 0 5px rgba(234,179,8,0.2);
+          }
+          50% {
+            text-shadow: 0 0 4px rgba(234,179,8,0.5), 0 0 8px rgba(234,179,8,0.3);
+          }
+        }
+        @keyframes logoBounceIn {
+          0% {
+            transform: scale(0.3);
+            opacity: 0;
+          }
+          55% {
+            transform: scale(1.15);
+            opacity: 1;
+          }
+          75% {
+            transform: scale(0.95);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+        .glow-type {
+          display: inline-block;
+          animation: typeGlow 2s ease-in-out infinite;
+          transition: transform 0.25s ease;
+        }
+        .glow-type:hover {
+          transform: scale(1.12);
+          animation-duration: 0.6s;
+        }
+        .glow-hanuman {
+          display: inline-block;
+          animation: hanumanGlow 2s ease-in-out infinite;
+          transition: transform 0.25s ease;
+        }
+        .glow-hanuman:hover {
+          transform: scale(1.12);
+          animation-duration: 0.6s;
+        }
+        .logo-bounce-in {
+          display: inline-block;
+          animation: logoBounceIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+      `}</style>
+
       <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className={`text-xl font-semibold tracking-tight ${t.header}`}>
-            Type<span className="text-yellow-500">Hanuman</span>
+          <h1 className={`text-xl font-semibold tracking-tight logo-bounce-in ${t.header}`}>
+            <span className="glow-type">Type</span>
+            <span className="text-yellow-500 glow-hanuman">Hanuman</span>
           </h1>
         </div>
 
