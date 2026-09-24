@@ -87,9 +87,11 @@ export default function App() {
           }
           75% {
             transform: scale(0.95);
+            opacity: 1;
           }
           100% {
             transform: scale(1);
+            opacity: 1;
           }
         }
         .glow-type {
@@ -114,6 +116,16 @@ export default function App() {
           display: inline-block;
           animation: logoBounceIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
         }
+        .btn-hover {
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .btn-hover:hover {
+          transform: scale(1.07);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .btn-hover:active {
+          transform: scale(0.96);
+        }
       `}</style>
 
       <header className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -130,13 +142,13 @@ export default function App() {
           <div className="flex gap-1">
             <button
               onClick={() => setPage('typing')}
-              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'typing' ? t.activebtn : t.btn}`}
+              className={`btn-hover px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'typing' ? t.activebtn : t.btn}`}
             >
               ⌨️ Typing
             </button>
             <button
               onClick={() => setPage('multiplayer')}
-              className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'multiplayer' ? t.activebtn : t.btn}`}
+              className={`btn-hover px-3 py-1.5 rounded-lg text-xs transition-colors ${page === 'multiplayer' ? t.activebtn : t.btn}`}
             >
               🏁 Race
             </button>
@@ -147,13 +159,13 @@ export default function App() {
             <div className="flex gap-1">
               <button
                 onClick={() => setLanguage('en')}
-                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'en' ? t.activebtn : t.btn}`}
+                className={`btn-hover px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'en' ? t.activebtn : t.btn}`}
               >
                 EN
               </button>
               <button
                 onClick={() => setLanguage('hi')}
-                className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'hi' ? t.activebtn : t.btn}`}
+                className={`btn-hover px-3 py-1.5 rounded-lg text-xs transition-colors ${language === 'hi' ? t.activebtn : t.btn}`}
                 style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
               >
                 हिं
@@ -167,7 +179,7 @@ export default function App() {
               <button
                 key={th}
                 onClick={() => setTheme(th)}
-                className={`px-3 py-1.5 rounded-lg text-xs capitalize transition-colors ${theme === th ? t.activebtn : t.btn}`}
+                className={`btn-hover px-3 py-1.5 rounded-lg text-xs capitalize transition-colors ${theme === th ? t.activebtn : t.btn}`}
               >
                 {th}
               </button>
@@ -178,7 +190,7 @@ export default function App() {
           {installPrompt && !isInstalled && (
             <button
               onClick={handleInstall}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 bg-yellow-500 hover:bg-yellow-400 text-black"
+              className="btn-hover px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-yellow-500 hover:bg-yellow-400 text-black"
             >
               ⬇️ Install App
             </button>

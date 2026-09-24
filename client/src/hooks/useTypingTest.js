@@ -13,10 +13,6 @@ errorSound.volume = 0.12;
 finishSound.volume = 0.2;
 
 const WORD_COUNT = 200;
-// When fewer than this many unused words remain ahead of the current
-// position, fetch another batch in the background so the test never
-// runs out of words mid-typing (was causing the timer to keep running
-// with no result screen once the initial 200 words were used up).
 const REFILL_THRESHOLD = 30;
 
 export default function useTypingTest(mode = 'time', customWords = [], duration = 60) {
@@ -28,6 +24,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
   const [correctWords, setCorrectWords] = useState(0);
   const [incorrectWords, setIncorrectWords] = useState(0);
   const [wordStatuses, setWordStatuses] = useState({});
+  const [typedWords, setTypedWords] = useState({}); // ✅ NEW: what user actually typed per word
   const [timeLeft, setTimeLeft] = useState(duration);
   const [started, setStarted] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -134,9 +131,6 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
 
   useEffect(() => { loadWords(); }, [loadWords]);
 
-  // Fetch another batch of words in the background and append it to the
-  // existing list — used so timed tests never run out of words no matter
-  // how long the selected duration is.
   const ensureMoreWords = useCallback(async (totalWordCount, currentIndex) => {
     if (mode === 'custom') return;
     if (totalWordCount - currentIndex > REFILL_THRESHOLD) return;
@@ -150,8 +144,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
         setWords(prev => [...prev, ...data.words]);
       }
     } catch {
-      // Silent failure is fine — we'll just retry on the next word
-      // commit since the buffer threshold check will fire again.
+      // Silent failure is fine
     } finally {
       isFetchingMoreRef.current = false;
     }
@@ -201,6 +194,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     setCorrectWords(0);
     setIncorrectWords(0);
     setWordStatuses({});
+    setTypedWords({}); // ✅ NEW
     setTimeLeft(durationRef.current);
     setStarted(false);
     setFinished(false);
@@ -232,6 +226,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
       const isCorrect = typedWord === currentWord;
 
       setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
+      setTypedWords(prev => ({ ...prev, [wordIndex]: typedWord })); // ✅ NEW
 
       if (isCorrect) {
         keySound.currentTime = 0;
@@ -304,6 +299,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     input,
     wordIndex,
     wordStatuses,
+    typedWords, // ✅ NEW
     timeLeft,
     started,
     finished,
