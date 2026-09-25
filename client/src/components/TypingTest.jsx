@@ -236,28 +236,23 @@ export default function TypingTest({ theme, themeStyles: t }) {
 
   const formattedTime = `${Math.floor(timeLeft / 60)}:${String(timeLeft % 60).padStart(2, '0')}`;
 
-  // ✅ Direct PDF download (no pop-up)
+  // ✅ Direct, vector-based PDF download (no screenshot, no pop-up, no oklch crash)
   const handleDownload = async () => {
     if (downloading) return;
     setDownloading(true);
-
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
-
-      const esc = (s) =>
-        String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const { jsPDF } = await import('jspdf');
 
       const doneWords = words.slice(0, wordIndex);
       const totalTyped = doneWords.length;
       const wrongCount = doneWords.filter((_, i) => wordStatuses?.[i] === 'incorrect').length;
       const correctCount = totalTyped - wrongCount;
 
-      // ---------- Level, quote, next goal ----------
-      let level = 'Beginner', tier = 'beginner', levelColor = '#94a3b8';
-      if (wpm >= 80) { level = 'Expert'; tier = 'expert'; levelColor = '#f43f5e'; }
-      else if (wpm >= 60) { level = 'Advanced'; tier = 'advanced'; levelColor = '#a855f7'; }
-      else if (wpm >= 40) { level = 'Intermediate'; tier = 'intermediate'; levelColor = '#3b82f6'; }
-      else if (wpm >= 20) { level = 'Learner'; tier = 'learner'; levelColor = '#10b981'; }
+      let level = 'Beginner', tier = 'beginner';
+      if (wpm >= 80) { level = 'Expert'; tier = 'expert'; }
+      else if (wpm >= 60) { level = 'Advanced'; tier = 'advanced'; }
+      else if (wpm >= 40) { level = 'Intermediate'; tier = 'intermediate'; }
+      else if (wpm >= 20) { level = 'Learner'; tier = 'learner'; }
       const quote = QUOTES[tier][Math.floor(Math.random() * QUOTES[tier].length)];
 
       const nextTarget = [20, 40, 60, 80].find((x) => x > wpm);
@@ -266,268 +261,362 @@ export default function TypingTest({ theme, themeStyles: t }) {
         ? `${nextTarget - wpm} more WPM to reach the next level (${nextTarget} WPM)`
         : 'Maximum level reached. You are a typing legend!';
 
-      // ---------- Achievements ----------
       const badges = [];
-      if (wpm >= 60) badges.push(['⚡', 'Speedster']);
-      if (accuracy >= 98 && totalTyped >= 10) badges.push(['🎯', 'Accuracy Ace']);
-      if (bestStreak >= 20) badges.push(['🔥', 'Streak Master']);
-      if (consistencyScore >= 85 && totalTyped >= 20) badges.push(['📊', 'Consistent']);
-      if (wrongCount === 0 && totalTyped >= 10) badges.push(['💎', 'Perfect Run']);
-      if (isNewRecord) badges.push(['🏆', 'New Record']);
-      if (badges.length === 0) badges.push(['🌱', 'Getting Started']);
-      const badgesHtml = badges
-        .map(([ic, nm]) => `<span class="th-badge">${ic} ${nm}</span>`)
-        .join('');
+      if (wpm >= 60) badges.push('SPEEDSTER');
+      if (accuracy >= 98 && totalTyped >= 10) badges.push('ACCURACY ACE');
+      if (bestStreak >= 20) badges.push('STREAK MASTER');
+      if (consistencyScore >= 85 && totalTyped >= 20) badges.push('CONSISTENT');
+      if (wrongCount === 0 && totalTyped >= 10) badges.push('PERFECT RUN');
+      if (isNewRecord) badges.push('NEW RECORD');
+      if (badges.length === 0) badges.push('GETTING STARTED');
 
-      // ---------- Typed text (wrong letters red / whole word red box) ----------
-      const renderWord = (correct, i) => {
-        if (wordStatuses?.[i] !== 'incorrect') return `<span class="th-w">${esc(correct)}</span>`;
-        const typed = typedWords?.[i] || '';
-        if (!typed) return `<span class="th-w th-whole">${esc(correct)}</span>`;
-
-        let matches = 0;
-        for (let k = 0; k < Math.min(typed.length, correct.length); k++) {
-          if (typed[k] === correct[k]) matches++;
-        }
-        if (matches === 0) return `<span class="th-w th-whole">${esc(typed)}</span>`;
-
-        const len = Math.max(typed.length, correct.length);
-        let out = '';
-        for (let k = 0; k < len; k++) {
-          if (k < typed.length) {
-            out += typed[k] === correct[k]
-              ? esc(typed[k])
-              : `<span class="th-bad">${esc(typed[k])}</span>`;
-          } else {
-            out += `<span class="th-bad">_</span>`;
-          }
-        }
-        return `<span class="th-w">${out}</span>`;
-      };
-      const bodyHtml = doneWords.map(renderWord).join(' ');
-
-      // ---------- Mistakes table ----------
-      const typedWithRed = (typed, correct) => {
-        let matches = 0;
-        for (let k = 0; k < Math.min(typed.length, correct.length); k++) {
-          if (typed[k] === correct[k]) matches++;
-        }
-        if (matches === 0) return `<span class="th-bad">${esc(typed)}</span>`;
-        let out = '';
-        for (let k = 0; k < typed.length; k++) {
-          out += typed[k] === correct[k]
-            ? esc(typed[k])
-            : `<span class="th-bad">${esc(typed[k])}</span>`;
-        }
-        return out;
-      };
-
-      const mistakes = doneWords
-        .map((w, i) => ({ correct: w, typed: typedWords?.[i] || '', i }))
-        .filter(({ i }) => wordStatuses?.[i] === 'incorrect');
-
-      const rows = mistakes.slice(0, 30).map(({ typed, correct }, n) => `
-        <tr class="th-avoid">
-          <td class="th-num">${n + 1}</td>
-          <td>${typed ? typedWithRed(typed, correct) : '<span class="th-bad">(blank)</span>'}</td>
-          <td class="th-good">${esc(correct)}</td>
-        </tr>`).join('');
-
-      const mistakesHtml = mistakes.length
-        ? `<table class="th-table">
-             <thead><tr><th style="width:40px">#</th><th>You typed</th><th>Correct word</th></tr></thead>
-             <tbody>${rows}</tbody>
-           </table>
-           ${mistakes.length > 30 ? `<p class="th-small">+ ${mistakes.length - 30} more mistakes not shown</p>` : ''}`
-        : `<div class="th-perfect">🎉 No mistakes at all. Perfect typing!</div>`;
-
-      // ---------- Problem keys ----------
       const topKeys = Object.entries(keyErrors || {})
         .filter(([k]) => k.trim() !== '')
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
-      const keysHtml = topKeys.length
-        ? topKeys.map(([k, n]) => `<span class="th-key">${esc(k)}<b>${n}</b></span>`).join('')
-        : '<span class="th-small">No problem keys 👏</span>';
 
-      // ---------- Personal tip ----------
       let tip = 'Great balance of speed and accuracy. Keep practicing daily!';
       if (totalTyped < 10) tip = 'Type a longer test to get more accurate insights.';
       else if (accuracy < 90) tip = 'Slow down a little. Accuracy comes first, speed follows automatically.';
       else if (consistencyScore < 60) tip = 'Try to keep a steady rhythm. Avoid rushing and then stopping.';
       else if (topKeys.length) tip = `Practice these keys more: ${topKeys.slice(0, 3).map(([k]) => k.toUpperCase()).join(', ')}.`;
 
-      // ---------- Speed graph ----------
-      let chartHtml = '';
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const PW = doc.internal.pageSize.getWidth();
+      const PH = doc.internal.pageSize.getHeight();
+      const M = 40;
+      const CW = PW - M * 2;
+      let y = 0;
+
+      const DARK = [2, 6, 23];
+      const NAVY = [15, 23, 42];
+      const YELLOW = [250, 204, 21];
+      const RED = [220, 38, 38];
+      const GREEN = [22, 163, 74];
+      const GRAY = [100, 116, 139];
+      const LIGHT = [248, 250, 252];
+      const BORDER = [226, 232, 240];
+      const WHITE = [255, 255, 255];
+
+      const newPage = () => { doc.addPage(); y = M; return y; };
+      const ensure = (h) => { if (y + h > PH - M) newPage(); };
+
+      // Header
+      doc.setFillColor(...DARK);
+      doc.rect(0, 0, PW, 150, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(...WHITE);
+      doc.text('Type', M, 40);
+      const typeW = doc.getTextWidth('Type');
+      doc.setTextColor(...YELLOW);
+      doc.text('Hanuman', M + typeW, 40);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(180, 190, 210);
+      const modeText = mode === 'time' ? `Time Test - ${selectedTime / 60} min` : 'Custom Paragraph';
+      doc.text('TYPING RESULT REPORT', PW - M, 30, { align: 'right' });
+      doc.text(new Date().toLocaleString(), PW - M, 42, { align: 'right' });
+      doc.text(modeText, PW - M, 54, { align: 'right' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(60);
+      doc.setTextColor(...YELLOW);
+      doc.text(String(wpm), M, 115);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(150, 160, 180);
+      doc.text('WORDS PER MINUTE', M, 130);
+
+      doc.setFillColor(...YELLOW);
+      doc.roundedRect(M, 138, doc.getTextWidth(level) + 24, 18, 9, 9, 'F');
+      doc.setTextColor(...DARK);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(level, M + 12, 150);
+
+      y = 175;
+
+      // Badges
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      let bx = M;
+      badges.forEach((b) => {
+        const w = doc.getTextWidth(b) + 16;
+        if (bx + w > M + CW) { bx = M; y += 22; }
+        doc.setFillColor(254, 249, 195);
+        doc.setDrawColor(253, 224, 71);
+        doc.roundedRect(bx, y, w, 18, 9, 9, 'FD');
+        doc.setTextColor(133, 77, 14);
+        doc.text(b, bx + 8, y + 12);
+        bx += w + 6;
+      });
+      y += 34;
+
+      // Stat grid
+      const stats = [
+        [`${accuracy}%`, 'Accuracy'],
+        [`${consistencyScore}%`, 'Consistency'],
+        [`${bestStreak}`, 'Best Streak'],
+        [`${personalBest}`, 'Personal Best'],
+        [`${totalTyped}`, 'Words Typed'],
+        [`${correctCount}`, 'Correct'],
+        [`${wrongCount}`, 'Wrong'],
+        [mode === 'time' ? `${selectedTime / 60}m` : 'Custom', 'Test'],
+      ];
+      const cardW = (CW - 3 * 8) / 4;
+      const cardH = 55;
+      stats.forEach(([val, label], i) => {
+        const col = i % 4, row = Math.floor(i / 4);
+        const cx = M + col * (cardW + 8);
+        const cy = y + row * (cardH + 8);
+        doc.setFillColor(...LIGHT);
+        doc.setDrawColor(...BORDER);
+        doc.roundedRect(cx, cy, cardW, cardH, 6, 6, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.setTextColor(...NAVY);
+        doc.text(String(val), cx + cardW / 2, cy + 26, { align: 'center' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(...GRAY);
+        doc.text(label.toUpperCase(), cx + cardW / 2, cy + 42, { align: 'center' });
+      });
+      y += 2 * (cardH + 8) + 14;
+
+      // Quote
+      ensure(64);
+      doc.setFillColor(...NAVY);
+      doc.roundedRect(M, y, CW, 44, 8, 8, 'F');
+      doc.setDrawColor(...YELLOW);
+      doc.setLineWidth(3);
+      doc.line(M, y + 4, M, y + 40);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(11);
+      doc.setTextColor(...WHITE);
+      doc.text(doc.splitTextToSize(`"${quote}"`, CW - 30), M + 16, y + 20);
+      y += 64;
+
+      // Speed chart
       if (wpmHistory && wpmHistory.length >= 2) {
-        const W = 700, H = 150, P = 24;
+        ensure(120);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(...NAVY);
+        doc.text('Speed Over Time', M, y);
+        y += 10;
+        const chartH = 90;
+        doc.setFillColor(...NAVY);
+        doc.roundedRect(M, y, CW, chartH, 6, 6, 'F');
         const max = Math.max(...wpmHistory, 10);
-        const xy = wpmHistory.map((v, i) => {
-          const x = P + (i * (W - 2 * P)) / (wpmHistory.length - 1);
-          const y = H - P - (v / max) * (H - 2 * P);
-          return [x, y];
-        });
-        const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-        const area = `${P},${H - P} ${line} ${W - P},${H - P}`;
-        const dots = xy.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#facc15"/>`).join('');
-        chartHtml = `
-          <div class="th-section th-avoid">
-            <h2>📈 Speed Over Time</h2>
-            <div class="th-chart">
-              <svg viewBox="0 0 ${W} ${H}" width="700" height="${H}">
-                <line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" stroke="#334155" stroke-width="1"/>
-                <line x1="${P}" y1="${P}" x2="${W - P}" y2="${P}" stroke="#334155" stroke-width="1" stroke-dasharray="4 4"/>
-                <polygon points="${area}" fill="rgba(250,204,21,0.18)"/>
-                <polyline fill="none" stroke="#facc15" stroke-width="3" stroke-linejoin="round" points="${line}"/>
-                ${dots}
-                <text x="${P}" y="16" font-size="11" fill="#94a3b8">Peak ${max} WPM</text>
-              </svg>
-            </div>
-          </div>`;
+        const pad = 12;
+        const pts = wpmHistory.map((v, i) => [
+          M + pad + (i * (CW - 2 * pad)) / (wpmHistory.length - 1),
+          y + chartH - pad - (v / max) * (chartH - 2 * pad),
+        ]);
+        doc.setDrawColor(...YELLOW);
+        doc.setLineWidth(2);
+        for (let i = 0; i < pts.length - 1; i++) doc.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
+        doc.setFillColor(...YELLOW);
+        pts.forEach(([px, py]) => doc.circle(px, py, 2, 'F'));
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(180, 190, 210);
+        doc.text(`Peak ${max} WPM`, M + pad, y + 14);
+        y += chartH + 20;
       }
 
-      // ---------- Accuracy ring ----------
-      const R = 50, C = 2 * Math.PI * R;
-      const dash = (Math.max(0, Math.min(100, accuracy)) / 100) * C;
-      const ringHtml = `
-        <svg width="140" height="140" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r="${R}" fill="none" stroke="#1e293b" stroke-width="12"/>
-          <circle cx="70" cy="70" r="${R}" fill="none" stroke="#facc15" stroke-width="12"
-            stroke-linecap="round" stroke-dasharray="${dash.toFixed(1)} ${C.toFixed(1)}"
-            transform="rotate(-90 70 70)"/>
-          <text x="70" y="76" text-anchor="middle" font-size="28" font-weight="700" fill="#ffffff" font-family="Arial">${accuracy}%</text>
-          <text x="70" y="96" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="Arial" letter-spacing="1.5">ACCURACY</text>
-        </svg>`;
+      // Next goal
+      ensure(80);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text('Next Goal', M, y);
+      y += 10;
+      doc.setFillColor(...BORDER);
+      doc.roundedRect(M, y, CW, 10, 5, 5, 'F');
+      doc.setFillColor(...YELLOW);
+      doc.roundedRect(M, y, (CW * goalPct) / 100, 10, 5, 5, 'F');
+      y += 20;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(...GRAY);
+      doc.text(goalText, M, y);
+      y += 20;
 
-      const modeText = mode === 'time' ? `Time Test • ${selectedTime / 60} min` : 'Custom Paragraph';
-      const dateText = new Date().toLocaleString();
+      doc.setFillColor(236, 253, 245);
+      doc.setDrawColor(167, 243, 208);
+      const tipLines = doc.splitTextToSize(`Tip: ${tip}`, CW - 24);
+      const tipH = tipLines.length * 12 + 14;
+      ensure(tipH);
+      doc.roundedRect(M, y, CW, tipH, 6, 6, 'FD');
+      doc.setTextColor(6, 95, 70);
+      doc.text(tipLines, M + 12, y + 16);
+      y += tipH + 20;
 
-      const html = `
-<div class="th-report">
-<style>
-  .th-report, .th-report * { box-sizing: border-box; }
-  .th-report { width: 794px; background: #ffffff; color: #0f172a; font-family: Arial, Helvetica, sans-serif; }
-  .th-hero { background: linear-gradient(135deg, #020617 0%, #0f172a 55%, #1e293b 100%); color: #fff; padding: 30px 36px 28px; }
-  .th-top { display: flex; justify-content: space-between; align-items: center; }
-  .th-brand { font-size: 26px; font-weight: 800; letter-spacing: .5px; }
-  .th-brand .y { color: #facc15; }
-  .th-meta { text-align: right; font-size: 11px; color: #94a3b8; line-height: 1.6; }
-  .th-hero-body { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
-  .th-wpm-num { font-size: 96px; font-weight: 800; line-height: 1; color: #facc15; }
-  .th-wpm-lbl { font-size: 12px; letter-spacing: 3px; color: #94a3b8; margin-top: 4px; }
-  .th-level { display: inline-block; margin-top: 14px; padding: 6px 16px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #fff; }
-  .th-body { padding: 8px 36px 24px; }
-  .th-badges { margin: 18px 0 4px; }
-  .th-badge { display: inline-block; background: #fef9c3; color: #854d0e; border: 1px solid #fde047; border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 700; margin: 0 6px 6px 0; }
-  .th-grid { display: flex; flex-wrap: wrap; margin: 14px -5px 0; }
-  .th-card { width: 25%; padding: 5px; }
-  .th-card > div { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 6px; text-align: center; background: #f8fafc; }
-  .th-card b { display: block; font-size: 24px; color: #0f172a; }
-  .th-card span { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #64748b; }
-  .th-quote { margin: 18px 0 4px; padding: 16px 20px; background: #0f172a; color: #fff; border-radius: 12px; border-left: 6px solid #facc15; font-size: 15px; font-style: italic; }
-  .th-section { margin-top: 20px; }
-  .th-section h2 { font-size: 15px; margin: 0 0 10px; color: #0f172a; }
-  .th-chart { background: #0f172a; border-radius: 12px; padding: 10px; }
-  .th-goal-bar { height: 12px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
-  .th-goal-fill { height: 12px; background: linear-gradient(90deg, #facc15, #f59e0b); border-radius: 999px; }
-  .th-goal-txt { font-size: 12px; color: #475569; margin-top: 6px; }
-  .th-tip { margin-top: 12px; padding: 12px 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; font-size: 13px; color: #065f46; }
-  .th-legend { font-size: 11px; color: #64748b; margin-bottom: 8px; }
-  .th-text { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; font-size: 15px; line-height: 2.2; background: #ffffff; }
-  .th-w { display: inline-block; margin-right: 4px; }
-  .th-bad { color: #dc2626; font-weight: 700; text-decoration: underline; }
-  .th-whole { background: #fee2e2; color: #dc2626; font-weight: 700; border: 1px solid #fca5a5; border-radius: 6px; padding: 0 6px; }
-  .th-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .th-table th { background: #0f172a; color: #fff; padding: 8px 10px; text-align: left; font-size: 12px; }
-  .th-table td { border-bottom: 1px solid #e2e8f0; padding: 7px 10px; }
-  .th-num { color: #94a3b8; }
-  .th-good { color: #16a34a; font-weight: 700; }
-  .th-perfect { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 12px; padding: 18px; text-align: center; font-weight: 700; }
-  .th-key { display: inline-block; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 6px 12px; margin: 0 8px 8px 0; font-family: monospace; font-size: 15px; color: #92400e; }
-  .th-key b { margin-left: 8px; color: #dc2626; font-size: 12px; }
-  .th-small { font-size: 12px; color: #64748b; }
-  .th-footer { background: #020617; color: #94a3b8; text-align: center; font-size: 11px; padding: 14px; }
-  .th-footer .y { color: #facc15; font-weight: 700; }
-</style>
+      // Typed text
+      ensure(40);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text('Your Typing', M, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...GRAY);
+      doc.text('Red = wrong letters   |   Red box = whole word wrong', M, y);
+      y += 14;
 
-  <div class="th-hero">
-    <div class="th-top">
-      <div class="th-brand">Type<span class="y">Hanuman</span></div>
-      <div class="th-meta">TYPING RESULT REPORT<br>${esc(dateText)}<br>${esc(modeText)}</div>
-    </div>
-    <div class="th-hero-body">
-      <div>
-        <div class="th-wpm-num">${wpm}</div>
-        <div class="th-wpm-lbl">WORDS PER MINUTE</div>
-        <div class="th-level" style="background:${levelColor}">${level}</div>
-      </div>
-      <div>${ringHtml}</div>
-    </div>
-  </div>
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(11);
+      let x = M;
+      const lineH = 18;
+      ensure(lineH);
 
-  <div class="th-body">
-    <div class="th-badges">${badgesHtml}</div>
+      doneWords.forEach((correct, i) => {
+        const wrong = wordStatuses?.[i] === 'incorrect';
+        const typed = typedWords?.[i] || '';
+        const display = wrong ? (typed || correct) : correct;
+        const w = doc.getTextWidth(display + ' ');
+        if (x + w > M + CW) { x = M; y += lineH; ensure(lineH); }
 
-    <div class="th-grid">
-      <div class="th-card"><div><b>${consistencyScore}%</b><span>Consistency</span></div></div>
-      <div class="th-card"><div><b>${bestStreak}</b><span>Best Streak</span></div></div>
-      <div class="th-card"><div><b>${personalBest}</b><span>Personal Best</span></div></div>
-      <div class="th-card"><div><b>${mode === 'time' ? selectedTime / 60 + ' min' : 'Custom'}</b><span>Test</span></div></div>
-      <div class="th-card"><div><b>${totalTyped}</b><span>Words Typed</span></div></div>
-      <div class="th-card"><div><b style="color:#16a34a">${correctCount}</b><span>Correct</span></div></div>
-      <div class="th-card"><div><b style="color:#dc2626">${wrongCount}</b><span>Wrong</span></div></div>
-      <div class="th-card"><div><b>${accuracy}%</b><span>Accuracy</span></div></div>
-    </div>
+        if (wrong) {
+          let matches = 0;
+          for (let k = 0; k < Math.min(typed.length, correct.length); k++) if (typed[k] === correct[k]) matches++;
+          if (!typed || matches === 0) {
+            const bw = doc.getTextWidth(display) + 6;
+            doc.setFillColor(254, 226, 226);
+            doc.setDrawColor(252, 165, 165);
+            doc.roundedRect(x - 2, y - 11, bw, 15, 3, 3, 'FD');
+            doc.setTextColor(...RED);
+            doc.text(display, x, y);
+          } else {
+            let cx2 = x;
+            for (let k = 0; k < display.length; k++) {
+              const ch = display[k];
+              const ok = k < correct.length && ch === correct[k];
+              doc.setTextColor(...(ok ? NAVY : RED));
+              doc.text(ch, cx2, y);
+              cx2 += doc.getTextWidth(ch);
+            }
+          }
+        } else {
+          doc.setTextColor(...NAVY);
+          doc.text(display, x, y);
+        }
+        x += w;
+      });
+      y += lineH + 20;
 
-    <div class="th-quote th-avoid">“${esc(quote)}”</div>
+      // Mistakes table
+      const mistakes = doneWords
+        .map((w, i) => ({ correct: w, typed: typedWords?.[i] || '', i }))
+        .filter(({ i }) => wordStatuses?.[i] === 'incorrect');
 
-    ${chartHtml}
+      ensure(30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text('Mistakes', M, y);
+      y += 12;
 
-    <div class="th-section th-avoid">
-      <h2>🎯 Next Goal</h2>
-      <div class="th-goal-bar"><div class="th-goal-fill" style="width:${goalPct}%"></div></div>
-      <div class="th-goal-txt">${esc(goalText)}</div>
-      <div class="th-tip">💡 <b>Tip:</b> ${esc(tip)}</div>
-    </div>
+      if (mistakes.length === 0) {
+        doc.setFillColor(236, 253, 245);
+        doc.roundedRect(M, y, CW, 30, 6, 6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(4, 120, 87);
+        doc.text('No mistakes at all. Perfect typing!', M + CW / 2, y + 19, { align: 'center' });
+        y += 40;
+      } else {
+        const rowH = 18;
+        const col1 = M, col2 = M + 250, colEnd = M + CW;
+        doc.setFillColor(...NAVY);
+        doc.rect(M, y, CW, rowH, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(...WHITE);
+        doc.text('You typed', col1 + 8, y + 12);
+        doc.text('Correct word', col2 + 8, y + 12);
+        y += rowH;
 
-    <div class="th-section">
-      <h2>⌨️ Your Typing</h2>
-      <div class="th-legend">
-        <span class="th-bad">Red letters</span> = wrong letters &nbsp;•&nbsp;
-        <span class="th-whole">Red box</span> = whole word wrong &nbsp;•&nbsp;
-        <span class="th-bad">_</span> = missing letter
-      </div>
-      <div class="th-text">${bodyHtml || '<span class="th-small">No words typed.</span>'}</div>
-    </div>
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(10);
+        mistakes.slice(0, 40).forEach(({ typed, correct }) => {
+          ensure(rowH);
+          doc.setDrawColor(...BORDER);
+          doc.line(M, y + rowH, colEnd, y + rowH);
+          let cx2 = col1 + 8;
+          if (!typed) {
+            doc.setTextColor(...RED);
+            doc.text('(blank)', cx2, y + 13);
+          } else {
+            for (let k = 0; k < typed.length; k++) {
+              const ok = k < correct.length && typed[k] === correct[k];
+              doc.setTextColor(...(ok ? NAVY : RED));
+              doc.text(typed[k], cx2, y + 13);
+              cx2 += doc.getTextWidth(typed[k]);
+            }
+          }
+          doc.setTextColor(...GREEN);
+          doc.text(correct, col2 + 8, y + 13);
+          y += rowH;
+        });
+        if (mistakes.length > 40) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(...GRAY);
+          doc.text(`+ ${mistakes.length - 40} more mistakes not shown`, M, y + 12);
+          y += 20;
+        }
+        y += 14;
+      }
 
-    <div class="th-section">
-      <h2>❌ Mistakes</h2>
-      ${mistakesHtml}
-    </div>
+      // Problem keys
+      ensure(40);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text('Problem Keys', M, y);
+      y += 14;
+      if (!topKeys.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(...GRAY);
+        doc.text('No problem keys', M, y);
+        y += 20;
+      } else {
+        let kx = M;
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(11);
+        topKeys.forEach(([k, n]) => {
+          const label = `${k}  (${n})`;
+          const w = doc.getTextWidth(label) + 20;
+          if (kx + w > M + CW) { kx = M; y += 26; }
+          doc.setFillColor(254, 243, 199);
+          doc.setDrawColor(252, 211, 77);
+          doc.roundedRect(kx, y - 12, w, 20, 5, 5, 'FD');
+          doc.setTextColor(146, 64, 14);
+          doc.text(label, kx + 10, y + 2);
+          kx += w + 6;
+        });
+        y += 30;
+      }
 
-    <div class="th-section th-avoid">
-      <h2>🔑 Problem Keys</h2>
-      <div>${keysHtml}</div>
-    </div>
-  </div>
+      // Footer on every page
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= pageCount; p++) {
+        doc.setPage(p);
+        doc.setFillColor(...DARK);
+        doc.rect(0, PH - 28, PW, 28, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(200, 200, 210);
+        doc.text('Generated by TypeHanuman.com - Keep practicing every day', PW / 2, PH - 12, { align: 'center' });
+      }
 
-  <div class="th-footer">Generated by <span class="y">TypeHanuman.com</span> • Keep practicing every day 🚀</div>
-</div>`;
-
-      const el = document.createElement('div');
-      el.innerHTML = html;
-
-      await html2pdf()
-        .set({
-          margin: [0, 0, 0, 0],
-          filename: `TypeHanuman-Result-${wpm}WPM.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'], avoid: ['.th-avoid'] },
-        })
-        .from(el)
-        .save();
+      doc.save(`TypeHanuman-Result-${wpm}WPM.pdf`);
     } catch (err) {
       console.error('PDF error:', err);
       alert('Could not create the PDF. Please try again.');
