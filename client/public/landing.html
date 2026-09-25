@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TypeHanuman — Type Faster, In Any Language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fdfdfc; --surface:#f4f4f3; --surface-2:#ececea; --border:#dcdcda;
+    --text:#141414; --muted:#65656b;
+    --gold:#b8860b; --green:#15803d;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#09090b; --surface:#141416; --surface-2:#1c1c1f; --border:#2a2a2e;
+      --text:#e7e7ea; --muted:#8a8a92;
+      --gold:#eab308; --green:#4ade80;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#09090b; --surface:#141416; --surface-2:#1c1c1f; --border:#2a2a2e;
+    --text:#e7e7ea; --muted:#8a8a92;
+    --gold:#eab308; --green:#4ade80;
+  }
+  *{box-sizing:inherit; margin:0; padding:0;}
+  html{scroll-padding-top:env(safe-area-inset-top,0px); scroll-behavior:smooth;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    line-height:1.6; overflow-x:hidden;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+  a{color:inherit;}
+  .wrap{max-width:960px; margin:0 auto; padding:0 24px;}
+  ::selection{background:var(--gold); color:var(--bg);}
+
+  header{
+    position:sticky; top:0; z-index:10;
+    padding:calc(env(safe-area-inset-top,0px) + 18px) 0 18px;
+    background:color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
+  }
+  header .wrap{display:flex; align-items:center; justify-content:space-between;}
+  .logo{font-family:'JetBrains Mono',monospace; font-weight:700; font-size:1.15rem; letter-spacing:-.02em;}
+  .logo span{color:var(--gold);}
+  .nav-cta{
+    font-family:'JetBrains Mono',monospace; font-size:.85rem; font-weight:600;
+    background:var(--green); color:#09270f; padding:8px 16px; border-radius:3px;
+    text-decoration:none; white-space:nowrap;
+  }
+
+  .hero{padding:88px 0 72px; border-bottom:1px solid var(--border); position:relative;}
+  .hero-tag{
+    font-family:'JetBrains Mono',monospace; font-size:.8rem; color:var(--green);
+    display:flex; align-items:center; gap:10px; margin-bottom:28px;
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--green); animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.35}}
+  h1{
+    font-family:'JetBrains Mono',monospace; font-weight:700;
+    font-size:clamp(2.1rem,5.2vw,3.4rem); line-height:1.12; letter-spacing:-.02em;
+    max-width:15ch;
+  }
+  .typewriter-line{display:block; white-space:nowrap; overflow:hidden; border-right:3px solid var(--gold);
+    width:0; animation:type 1.8s steps(28,end) 0.3s forwards, blink .8s step-end infinite;
+  }
+  @keyframes type{from{width:0} to{width:100%}}
+  @keyframes blink{50%{border-color:transparent}}
+  .hero p.sub{margin-top:26px; max-width:52ch; color:var(--muted); font-size:1.05rem;}
+  .hero-actions{display:flex; gap:14px; margin-top:36px; flex-wrap:wrap;}
+  .btn-primary{
+    font-family:'JetBrains Mono',monospace; font-weight:600; font-size:.95rem;
+    background:var(--gold); color:var(--bg); padding:13px 26px; border-radius:3px;
+    text-decoration:none; border:1px solid var(--gold);
+  }
+  .btn-ghost{
+    font-family:'JetBrains Mono',monospace; font-weight:500; font-size:.95rem;
+    background:transparent; color:var(--text); padding:13px 26px; border-radius:3px;
+    text-decoration:none; border:1px solid var(--border);
+  }
+  .hero-stats{display:flex; gap:36px; margin-top:52px; flex-wrap:wrap;}
+  .hero-stats div{font-family:'JetBrains Mono',monospace;}
+  .hero-stats b{display:block; font-size:1.4rem; color:var(--gold);}
+  .hero-stats span{font-size:.8rem; color:var(--muted);}
+
+  section{padding:64px 0; border-bottom:1px solid var(--border);}
+  h2{font-family:'JetBrains Mono',monospace; font-weight:600; font-size:clamp(1.4rem,3vw,1.9rem); letter-spacing:-.01em; max-width:22ch;}
+  .section-sub{color:var(--muted); max-width:56ch; margin-top:12px; font-size:1rem;}
+
+  .who-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); margin-top:40px; border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .who-card{background:var(--surface); padding:28px 24px;}
+  .who-card .k{font-family:'JetBrains Mono',monospace; font-size:.78rem; color:var(--green); margin-bottom:10px;}
+  .who-card h3{font-size:1.05rem; font-weight:600; margin-bottom:8px;}
+  .who-card p{color:var(--muted); font-size:.92rem;}
+
+  .usp{display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; margin-top:8px;}
+  .usp-visual{background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:20px; font-family:'JetBrains Mono',monospace; font-size:.85rem;}
+  .usp-visual .row{display:flex; align-items:center; gap:10px; padding:10px 0;}
+  .usp-visual .row + .row{border-top:1px dashed var(--border);}
+  .usp-visual .tag{font-size:.7rem; color:var(--muted); width:64px; flex-shrink:0;}
+  .usp-visual .val{color:var(--text); word-break:break-word;}
+  .usp-visual .arrow{color:var(--gold); text-align:center; font-size:.9rem;}
+  .usp-visual .val.out{color:var(--green);}
+
+  .exam-list{margin-top:32px; display:flex; flex-direction:column; border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .exam-row{display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:var(--surface);}
+  .exam-row + .exam-row{border-top:1px solid var(--border);}
+  .exam-row b{font-family:'JetBrains Mono',monospace; font-size:.95rem;}
+  .exam-row span{color:var(--muted); font-size:.85rem;}
+  .exam-row em{font-style:normal; color:var(--gold); font-family:'JetBrains Mono',monospace; font-size:.8rem;}
+
+  .race{display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center;}
+  .race-visual{display:flex; flex-direction:column; gap:10px;}
+  .racer{display:flex; align-items:center; gap:12px; font-family:'JetBrains Mono',monospace; font-size:.82rem;}
+  .racer .track{flex:1; height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; border:1px solid var(--border);}
+  .racer .fill{height:100%; background:var(--green); border-radius:4px;}
+  .racer .name{width:64px; color:var(--muted); flex-shrink:0;}
+
+  .trust-row{display:flex; gap:0; margin-top:32px; border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .trust-item{flex:1; padding:22px; text-align:center;}
+  .trust-item + .trust-item{border-left:1px solid var(--border);}
+  .trust-item b{display:block; font-family:'JetBrains Mono',monospace; font-size:1.15rem; color:var(--gold);}
+  .trust-item span{font-size:.82rem; color:var(--muted);}
+
+  .final{text-align:left; border-bottom:none; padding-bottom:88px;}
+  .final h2{max-width:none;}
+  .final .btn-primary{margin-top:26px; display:inline-block;}
+
+  footer{padding:28px 0 calc(28px + env(safe-area-inset-bottom,0px)); text-align:center;}
+  footer p{color:var(--muted); font-size:.82rem; font-family:'JetBrains Mono',monospace;}
+
+  @media (max-width:720px){
+    .who-grid{grid-template-columns:1fr;}
+    .usp{grid-template-columns:1fr;}
+    .race{grid-template-columns:1fr;}
+    .trust-row{flex-wrap:wrap;}
+    .trust-item{flex:1 1 50%; border-left:none !important; border-top:1px solid var(--border);}
+    .trust-item:nth-child(1),.trust-item:nth-child(2){border-top:none;}
+    h1{max-width:none;}
+    .typewriter-line{white-space:normal; animation:none; width:auto; border-right:none;}
+    .exam-row{flex-direction:column; align-items:flex-start; gap:4px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .typewriter-line{animation:none; width:auto; border-right:none;}
+    .dot{animation:none;}
+  }
+  :focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">Type<span>Hanuman</span></div>
+    <a href="https://typehanuman.com" class="nav-cta">Start Test</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-tag mono"><span class="dot"></span> free · no signup required</div>
+    <h1><span class="typewriter-line">Type faster. Type smarter.</span></h1>
+    <p class="sub">A typing test that reads your text and figures out the rest — in English, or in Hindi across Mangal and Krutidev fonts. Paste anything. It just works.</p>
+    <div class="hero-actions">
+      <a href="https://typehanuman.com" class="btn-primary">Start Typing Test</a>
+      <a href="#exams" class="btn-ghost">Practicing for an exam →</a>
+    </div>
+    <div class="hero-stats">
+      <div><b>7+</b><span>major exam patterns</span></div>
+      <div><b>3</b><span>Hindi layouts</span></div>
+      <div><b>5</b><span>players per race</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Built for however you type</h2>
+    <p class="section-sub">Three different reasons people land here — TypeHanuman doesn't make you pick a lane.</p>
+    <div class="who-grid">
+      <div class="who-card">
+        <div class="k mono">01_casual</div>
+        <h3>Just want your WPM</h3>
+        <p>Run a quick test, get accuracy and consistency, download the result as a PDF, and try to beat it next time.</p>
+      </div>
+      <div class="who-card">
+        <div class="k mono">02_exam</div>
+        <h3>Prepping for a govt exam</h3>
+        <p>CPCT, SSC, RRB NTPC and more — each with the real exam duration, keyboard layout, and backspace rule already set.</p>
+      </div>
+      <div class="who-card">
+        <div class="k mono">03_racer</div>
+        <h3>Want to beat your friends</h3>
+        <p>Start a live race with up to five people and watch everyone's speed in real time as you type.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Paste any font. We convert it.</h2>
+    <p class="section-sub">Most Hindi typing tools make you find the "right" font first. TypeHanuman reads what you paste — Unicode or legacy Krutidev — and converts it to match whichever keyboard layout you're practicing on.</p>
+    <div class="usp">
+      <div class="usp-visual">
+        <div class="row"><span class="tag">paste</span><span class="val">'vko';drk gh vkfo"dkj dh tuuh gS'</span></div>
+        <div class="arrow">↓ auto-detected as Krutidev, converting to Mangal</div>
+        <div class="row"><span class="tag">typed</span><span class="val out">'आवश्यकता ही आविष्कार की जननी है'</span></div>
+      </div>
+      <div>
+        <p style="color:var(--muted); margin-bottom:14px;">No dropdown to hunt through. No re-typing your practice material in the "correct" font. Copy from anywhere — a PDF, a WhatsApp forward, an old exam paper — and paste it straight in.</p>
+        <p style="color:var(--muted);">Works across all three Hindi layouts: <b style="color:var(--text)">Mangal InScript</b>, <b style="color:var(--text)">Mangal Remington GAIL</b>, and <b style="color:var(--text)">Krutidev 010</b> — plus a beginner-friendly on-screen keyboard guide while you get used to it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="exams">
+  <div class="wrap">
+    <h2>Choose your exam, we'll set the rest</h2>
+    <p class="section-sub">These are the major patterns — most other state and government typing exams follow one of them closely, so you're covered either way. Duration, keyboard layout, and backspace rule are set to match the real exam, not a generic timer.</p>
+    <div class="exam-list">
+      <div class="exam-row"><div><b class="mono">CPCT</b> <span>— MP Govt.</span></div><em>15 min</em></div>
+      <div class="exam-row"><div><b class="mono">SSC</b> <span>— CGL / CHSL / Stenographer</span></div><em>10 min</em></div>
+      <div class="exam-row"><div><b class="mono">RRB NTPC</b> <span>— Junior Clerk / Typist</span></div><em>10 min</em></div>
+      <div class="exam-row"><div><b class="mono">UPSSSC</b> <span>— Junior Assistant</span></div><em>5 min</em></div>
+      <div class="exam-row"><div><b class="mono">RSMSSB</b> <span>— Informatics Assistant, Rajasthan</span></div><em>15 min</em></div>
+      <div class="exam-row"><div><b class="mono">BSSC</b> <span>— Inter Level, Bihar</span></div><em>10 min</em></div>
+      <div class="exam-row"><div><b class="mono">High Court</b> <span>— Clerk / Copyist</span></div><em>10 min</em></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap race">
+    <div>
+      <h2>Type together. Race live.</h2>
+      <p class="section-sub">Start a room, share the code, and race up to four friends. Everyone's speed updates as they type — first to finish wins.</p>
+      <a href="https://typehanuman.com" class="btn-ghost" style="margin-top:22px; display:inline-block;">Start a Race</a>
+    </div>
+    <div class="race-visual">
+      <div class="racer"><span class="name">you</span><div class="track"><div class="fill" style="width:78%"></div></div></div>
+      <div class="racer"><span class="name">rahul</span><div class="track"><div class="fill" style="width:61%"></div></div></div>
+      <div class="racer"><span class="name">priya</span><div class="track"><div class="fill" style="width:45%"></div></div></div>
+      <div class="racer"><span class="name">amit</span><div class="track"><div class="fill" style="width:33%"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="trust-row">
+      <div class="trust-item"><b>7+</b><span>major exam patterns</span></div>
+      <div class="trust-item"><b>3</b><span>Hindi layouts</span></div>
+      <div class="trust-item"><b>∞</b><span>free practice</span></div>
+      <div class="trust-item"><b>PDF</b><span>result download</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="final" id="start">
+  <div class="wrap">
+    <h2>Ready to see your WPM?</h2>
+    <a href="https://typehanuman.com" class="btn-primary">Start Free Typing Test</a>
+  </div>
+</section>
+
+<footer>
+  <p class="wrap">typehanuman.com — Jai Shree Ram!</p>
+</footer>
+
+</body>
+</html>
