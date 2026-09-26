@@ -195,6 +195,12 @@ app.get('/api/words', (req, res) => {
 });
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
+
+// 👇 NAYA CODE — root ('/') pe ab landing page dikhega
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(clientDist, 'landing.html'));
+});
+
 app.use(express.static(clientDist));
 app.get('/{*splat}', (_req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
