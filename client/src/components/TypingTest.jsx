@@ -4,6 +4,23 @@ import useTypingTest from '../hooks/useTypingTest';
 const MODES = ['time', 'custom'];
 const TIME_OPTIONS = [1, 2, 3, 5, 10, 15, 20, 25];
 
+// Shared fade/slide-in animation for mode switches (Time / Custom)
+const MODE_TRANSITION_STYLE = `
+  @keyframes modeFadeSlideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .mode-fade-in {
+    animation: modeFadeSlideIn 0.32s ease-out both;
+  }
+`;
+
 const QUOTES = {
   beginner: [
     'Every expert was once a beginner. Keep typing!',
@@ -695,8 +712,9 @@ export default function TypingTest({ theme, themeStyles: t }) {
 
   return (
     <div className="flex flex-col flex-1 max-w-5xl mx-auto w-full gap-6">
+      <style>{MODE_TRANSITION_STYLE}</style>
 
-      {/* Mode Buttons */}
+      {/* Mode Buttons — pinned, never animated itself */}
       <div className="flex justify-center gap-2 flex-wrap">
         {MODES.map((m) => (
           <button key={m} onClick={() => handleModeChange(m)} className={`px-4 py-1.5 rounded-lg text-sm capitalize transition-all ${mode === m ? colors.glassButtonActive : colors.glassButton} ${colors.textNormal}`}>
@@ -705,121 +723,126 @@ export default function TypingTest({ theme, themeStyles: t }) {
         ))}
       </div>
 
-      {/* Time Options */}
-      {mode === 'time' && (
-        <div className="flex justify-center gap-2 flex-wrap">
-          {TIME_OPTIONS.map((min) => (
-            <button key={min} onClick={() => handleTimeChange(min)} className={`px-3 py-1 rounded-lg text-xs transition-all ${selectedTime === min * 60 ? colors.glassButtonActive : colors.glassButton} ${colors.textNormal}`}>
-              {`${min} min`}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Everything below reacts to mode/customReady changes, so it gets a fresh
+          key on every switch — this replays the fade/slide-in animation each time. */}
+      <div key={`${mode}-${customReady}`} className="mode-fade-in flex flex-col gap-6">
 
-      {/* Progress Bar */}
-      {(mode !== 'custom' || customReady) && (
-        <ProgressBar current={wordIndex} total={words.length} mode={mode} timeLeft={timeLeft} duration={selectedTime} theme={theme} />
-      )}
-
-      {/* Custom Mode */}
-      {mode === 'custom' && !customReady && (
-        <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
-
-          <div>
-            <p className={`text-sm text-center mb-3 ${colors.textMuted}`}>Choose a paragraph or paste your own</p>
-            <div className="grid grid-cols-1 gap-2">
-              {PRESET_PARAGRAPHS.map((preset) => (
-                <button
-                  key={preset.title}
-                  onClick={() => handlePresetSelect(preset)}
-                  className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${
-                    selectedPreset === preset.title
-                      ? colors.glassButtonActive
-                      : colors.glassButton
-                  } ${colors.textNormal}`}
-                >
-                  <span className="font-medium">{preset.title}</span>
-                  <span className={`ml-2 text-xs ${colors.textMuted}`}>
-                    {preset.text.split(' ').length} words
-                  </span>
-                </button>
-              ))}
-            </div>
+        {/* Time Options */}
+        {mode === 'time' && (
+          <div className="flex justify-center gap-2 flex-wrap">
+            {TIME_OPTIONS.map((min) => (
+              <button key={min} onClick={() => handleTimeChange(min)} className={`px-3 py-1 rounded-lg text-xs transition-all ${selectedTime === min * 60 ? colors.glassButtonActive : colors.glassButton} ${colors.textNormal}`}>
+                {`${min} min`}
+              </button>
+            ))}
           </div>
+        )}
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className={`text-xs ${colors.textMuted}`}>or paste your own</span>
-            <div className="flex-1 h-px bg-white/10" />
-          </div>
+        {/* Progress Bar */}
+        {(mode !== 'custom' || customReady) && (
+          <ProgressBar current={wordIndex} total={words.length} mode={mode} timeLeft={timeLeft} duration={selectedTime} theme={theme} />
+        )}
 
-          <textarea
-            className={`w-full h-28 rounded-xl p-4 text-sm resize-none outline-none ${colors.glassCard} ${colors.textNormal}`}
-            placeholder="Paste any paragraph here..."
-            value={customText}
-            onChange={(e) => { setCustomText(e.target.value); setSelectedPreset(null); }}
-          />
+        {/* Custom Mode */}
+        {mode === 'custom' && !customReady && (
+          <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
 
-          <button
-            onClick={() => customText.trim().length > 0 && setCustomReady(true)}
-            className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 ${
-              customText.trim().length > 0
-                ? (theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white')
-                : colors.glassButton + ' ' + colors.textMuted
-            }`}
-          >
-            Start Typing →
-          </button>
-        </div>
-      )}
-
-      {/* Typing Area */}
-      {(mode !== 'custom' || customReady) && (
-        <>
-          <div className="flex justify-center gap-12 py-2">
-            <Stat label="time" value={formattedTime} />
-            <Stat label="wpm" value={wpm} />
-            <Stat label="acc" value={accuracy} />
-          </div>
-
-          <div className="relative">
-            <div ref={containerRef} className={`h-80 overflow-hidden rounded-2xl p-8 shadow-xl ${colors.glassCard}`} onClick={() => inputRef.current?.focus()} role="presentation">
-              <div className={`text-3xl leading-loose select-none tracking-wide font-mono ${colors.textNormal}`}>
-                {words.map((word, wIndex) => (
-                  <span 
-                    key={`${word}-${wIndex}`} 
-                    className={`inline-block mr-3 ${
-                      wIndex < wordIndex && wordStatuses?.[wIndex] === 'incorrect'
-                        ? 'underline decoration-red-500 decoration-2'
-                        : ''
-                    } ${wIndex === wordIndex ? 'relative' : ''}`}
+            <div>
+              <p className={`text-sm text-center mb-3 ${colors.textMuted}`}>Choose a paragraph or paste your own</p>
+              <div className="grid grid-cols-1 gap-2">
+                {PRESET_PARAGRAPHS.map((preset) => (
+                  <button
+                    key={preset.title}
+                    onClick={() => handlePresetSelect(preset)}
+                    className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${
+                      selectedPreset === preset.title
+                        ? colors.glassButtonActive
+                        : colors.glassButton
+                    } ${colors.textNormal}`}
                   >
-                    {word.split('').map((char, charIndex) => {
-                      const status = getCharStatus(wIndex, charIndex);
-                      let textColor = colors.untyped;
-                      if (status === 'correct') textColor = colors.correct;
-                      if (status === 'incorrect') textColor = colors.incorrect;
-                      const isCurrentChar = (wIndex === wordIndex && charIndex === input.length);
-                      if (isCurrentChar) textColor = colors.current;
-                      const showCursor = (wIndex === wordIndex && charIndex === input.length + 1);
-                      return (
-                        <span key={charIndex} data-cursor={showCursor ? 'true' : undefined} className={`${textColor} transition-colors duration-75 relative inline-block`}>
-                          {showCursor && <span className="absolute -left-0.5 top-0 bottom-0 w-0.5" style={{ backgroundColor: colors.cursor, animation: 'blinkCursor 1s step-end infinite' }} />}
-                          {char}
-                        </span>
-                      );
-                    })}
-                  </span>
+                    <span className="font-medium">{preset.title}</span>
+                    <span className={`ml-2 text-xs ${colors.textMuted}`}>
+                      {preset.text.split(' ').length} words
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
-            <input ref={inputRef} value={input} onChange={(e) => handleInput(e.target.value)} disabled={finished} className="absolute inset-0 opacity-0 cursor-text" autoFocus autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
-          </div>
 
-          <p className={`text-center text-sm ${colors.textMuted}`}>Click here or start typing — press space after each word</p>
-          <button onClick={reset} className={`mx-auto text-sm transition ${colors.textMuted}`}>Reset</button>
-        </>
-      )}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className={`text-xs ${colors.textMuted}`}>or paste your own</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+
+            <textarea
+              className={`w-full h-28 rounded-xl p-4 text-sm resize-none outline-none ${colors.glassCard} ${colors.textNormal}`}
+              placeholder="Paste any paragraph here..."
+              value={customText}
+              onChange={(e) => { setCustomText(e.target.value); setSelectedPreset(null); }}
+            />
+
+            <button
+              onClick={() => customText.trim().length > 0 && setCustomReady(true)}
+              className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 ${
+                customText.trim().length > 0
+                  ? (theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white')
+                  : colors.glassButton + ' ' + colors.textMuted
+              }`}
+            >
+              Start Typing →
+            </button>
+          </div>
+        )}
+
+        {/* Typing Area */}
+        {(mode !== 'custom' || customReady) && (
+          <>
+            <div className="flex justify-center gap-12 py-2">
+              <Stat label="time" value={formattedTime} />
+              <Stat label="wpm" value={wpm} />
+              <Stat label="acc" value={accuracy} />
+            </div>
+
+            <div className="relative">
+              <div ref={containerRef} className={`h-80 overflow-hidden rounded-2xl p-8 shadow-xl ${colors.glassCard}`} onClick={() => inputRef.current?.focus()} role="presentation">
+                <div className={`text-3xl leading-loose select-none tracking-wide font-mono ${colors.textNormal}`}>
+                  {words.map((word, wIndex) => (
+                    <span 
+                      key={`${word}-${wIndex}`} 
+                      className={`inline-block mr-3 ${
+                        wIndex < wordIndex && wordStatuses?.[wIndex] === 'incorrect'
+                          ? 'underline decoration-red-500 decoration-2'
+                          : ''
+                      } ${wIndex === wordIndex ? 'relative' : ''}`}
+                    >
+                      {word.split('').map((char, charIndex) => {
+                        const status = getCharStatus(wIndex, charIndex);
+                        let textColor = colors.untyped;
+                        if (status === 'correct') textColor = colors.correct;
+                        if (status === 'incorrect') textColor = colors.incorrect;
+                        const isCurrentChar = (wIndex === wordIndex && charIndex === input.length);
+                        if (isCurrentChar) textColor = colors.current;
+                        const showCursor = (wIndex === wordIndex && charIndex === input.length + 1);
+                        return (
+                          <span key={charIndex} data-cursor={showCursor ? 'true' : undefined} className={`${textColor} transition-colors duration-75 relative inline-block`}>
+                            {showCursor && <span className="absolute -left-0.5 top-0 bottom-0 w-0.5" style={{ backgroundColor: colors.cursor, animation: 'blinkCursor 1s step-end infinite' }} />}
+                            {char}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <input ref={inputRef} value={input} onChange={(e) => handleInput(e.target.value)} disabled={finished} className="absolute inset-0 opacity-0 cursor-text" autoFocus autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} />
+            </div>
+
+            <p className={`text-center text-sm ${colors.textMuted}`}>Click here or start typing — press space after each word</p>
+            <button onClick={reset} className={`mx-auto text-sm transition ${colors.textMuted}`}>Reset</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

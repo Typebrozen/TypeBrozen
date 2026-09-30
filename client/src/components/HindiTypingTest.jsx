@@ -45,6 +45,23 @@ const MODE_LABELS = {
 const DEFAULT_MINUTES = 1;
 const MIN_WORDS = 70;
 
+// Shared fade/slide-in animation for mode switches (Time / Custom / Exam)
+const MODE_TRANSITION_STYLE = `
+  @keyframes modeFadeSlideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .mode-fade-in {
+    animation: modeFadeSlideIn 0.32s ease-out both;
+  }
+`;
+
 function randomParagraph(source) {
   const usedIndexes = new Set();
   let combined = "";
@@ -309,7 +326,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
   if (showExam) {
-    return <ExamMode onExit={() => setShowExam(false)} theme={theme} themeStyles={t} />;
+    return (
+      <div className="mode-fade-in">
+        <style>{MODE_TRANSITION_STYLE}</style>
+        <ExamMode onExit={() => setShowExam(false)} theme={theme} themeStyles={t} />
+      </div>
+    );
   }
 
   // ── RESULTS SCREEN ──
@@ -405,14 +427,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
 
   return (
-    // Vertical centering only kicks in on larger screens (lg: = 1024px+),
-    // where there's genuinely spare room above/below. On phones/small
-    // screens, content just flows normally top-to-bottom — scrolling
-    // down always reveals everything, nothing hides above the fold.
     <div
-      className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8 lg:justify-center lg:min-h-[calc(100vh-6rem)]"
+      className="flex flex-col max-w-4xl mx-auto w-full py-8"
       onClick={refocusHiddenInput}
     >
+      <style>{MODE_TRANSITION_STYLE}</style>
+
       <input
         ref={hiddenInputRef}
         tabIndex={-1}
@@ -420,204 +440,216 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         style={{ top: 0, left: 0, width: 1, height: 1 }}
       />
 
-      <div className="flex justify-center gap-2 flex-wrap">
-        <button
-          onClick={() => handleSelectMode("mangal")}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "mangal" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
-          }`}
-        >
-          Mangal (InScript)
-        </button>
-        <button
-          onClick={() => handleSelectMode("gail")}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "gail" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
-          }`}
-        >
-          Mangal (Remington GAIL)
-        </button>
-        <button
-          onClick={() => handleSelectMode("krutidev")}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            mode === "krutidev" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
-          }`}
-        >
-          Krutidev 010
-        </button>
-      </div>
-
-      {(mode === "krutidev" || mode === "gail") && (
-        <p className={`text-center text-xs ${t.textMuted}`}>
-          विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
-        </p>
-      )}
-
-      <div className="flex justify-center gap-2">
-        <button
-          onClick={() => handleModeToggle("time")}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            testMode === "time" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
-          }`}
-        >
-          Time
-        </button>
-        <button
-          onClick={() => handleModeToggle("custom")}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
-            testMode === "custom" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
-          }`}
-        >
-          Custom
-        </button>
-        <button
-          onClick={() => setShowExam(true)}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all ${t.glassButton} ${t.textMuted} hover:opacity-80`}
-        >
-          Exam
-        </button>
-      </div>
-
-      {testMode === "custom" && !customReady && (
-        <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
-          <p className={`text-sm text-center ${t.textMuted}`}>
-            Mangal ya Krutidev — jo bhi text paste karoge, hum khud pehchan lenge
-          </p>
-          <textarea
-            className={`w-full h-32 rounded-xl p-4 text-sm resize-none outline-none ${t.glassCard} ${t.textNormal}`}
-            placeholder="Apna paragraph yahan paste karo..."
-            value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-          />
+      {/* ── PINNED TOP SECTION ──
+          Layout selector + Time/Custom/Exam tabs. Stays in place across mode switches. */}
+      <div className="flex flex-col gap-6">
+        <div className="flex justify-center gap-2 flex-wrap">
           <button
-            onClick={handleStartCustom}
-            disabled={customText.trim().length === 0}
-            className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 ${t.primaryButton}`}
+            onClick={() => handleSelectMode("mangal")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "mangal" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
           >
-            Start Typing →
+            Mangal (InScript)
+          </button>
+          <button
+            onClick={() => handleSelectMode("gail")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "gail" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Mangal (Remington GAIL)
+          </button>
+          <button
+            onClick={() => handleSelectMode("krutidev")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "krutidev" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Krutidev 010
           </button>
         </div>
-      )}
 
-      {showTypingArea && (
-        <>
-          {testMode === "time" && (
-            <div className="flex justify-center gap-2 flex-wrap">
-              {TIME_OPTIONS_MIN.map((min) => (
-                <button
-                  key={min}
-                  onClick={() => handleSelectTime(min)}
-                  className={`px-3 py-1 rounded-lg text-xs transition-all flex flex-col items-center ${
-                    selectedTime === min * 60
-                      ? `${t.glassButtonActive} ${t.textNormal}`
-                      : `${t.glassButton} ${t.textMuted}`
-                  }`}
-                >
-                  <span>{min} min</span>
-                  {TIME_EXAM_LABELS[min] && (
-                    <span className="text-[9px] opacity-70">{TIME_EXAM_LABELS[min]}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+        {(mode === "krutidev" || mode === "gail") && (
+          <p className={`text-center text-xs ${t.textMuted}`}>
+            विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
+          </p>
+        )}
 
-          <div className="text-center">
-            <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
-          </div>
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => handleModeToggle("time")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              testMode === "time" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Time
+          </button>
+          <button
+            onClick={() => handleModeToggle("custom")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              testMode === "custom" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Custom
+          </button>
+          <button
+            onClick={() => setShowExam(true)}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${t.glassButton} ${t.textMuted} hover:opacity-80`}
+          >
+            Exam
+          </button>
+        </div>
+      </div>
 
-          <div className={`p-8 shadow-xl ${t.glassCard}`}>
-            <div
-              ref={passageContainerRef}
-              className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
-              style={{ fontFamily, lineHeight: "3.5rem", maxHeight: "7.5rem" }}
+      {/* ── VARIABLE-HEIGHT SECTION BELOW ──
+          key={testMode + customReady} forces React to remount this block on every
+          mode switch, replaying the fade/slide-in animation each time. */}
+      <div
+        key={`${testMode}-${customReady}-${mode}`}
+        className="mode-fade-in flex flex-col gap-6 mt-6 lg:flex-1 lg:justify-center"
+      >
+        {testMode === "custom" && !customReady && (
+          <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+            <p className={`text-sm text-center ${t.textMuted}`}>
+              Mangal ya Krutidev — jo bhi text paste karoge, hum khud pehchan lenge
+            </p>
+            <textarea
+              className={`w-full h-32 rounded-xl p-4 text-sm resize-none outline-none ${t.glassCard} ${t.textNormal}`}
+              placeholder="Apna paragraph yahan paste karo..."
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+            />
+            <button
+              onClick={handleStartCustom}
+              disabled={customText.trim().length === 0}
+              className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 ${t.primaryButton}`}
             >
-              {state.words.map((word, wIdx) => {
-                if (wIdx < state.wordIndex) {
-                  const result = state.wordResults[wIdx];
+              Start Typing →
+            </button>
+          </div>
+        )}
+
+        {showTypingArea && (
+          <>
+            {testMode === "time" && (
+              <div className="flex justify-center gap-2 flex-wrap">
+                {TIME_OPTIONS_MIN.map((min) => (
+                  <button
+                    key={min}
+                    onClick={() => handleSelectTime(min)}
+                    className={`px-3 py-1 rounded-lg text-xs transition-all flex flex-col items-center ${
+                      selectedTime === min * 60
+                        ? `${t.glassButtonActive} ${t.textNormal}`
+                        : `${t.glassButton} ${t.textMuted}`
+                    }`}
+                  >
+                    <span>{min} min</span>
+                    {TIME_EXAM_LABELS[min] && (
+                      <span className="text-[9px] opacity-70">{TIME_EXAM_LABELS[min]}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="text-center">
+              <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
+            </div>
+
+            <div className={`p-8 shadow-xl ${t.glassCard}`}>
+              <div
+                ref={passageContainerRef}
+                className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
+                style={{ fontFamily, lineHeight: "3.5rem", maxHeight: "7.5rem" }}
+              >
+                {state.words.map((word, wIdx) => {
+                  if (wIdx < state.wordIndex) {
+                    const result = state.wordResults[wIdx];
+                    return (
+                      <span
+                        key={wIdx}
+                        className={result === "correct" ? t.correct : `${t.incorrect} underline decoration-2`}
+                      >
+                        {word}
+                      </span>
+                    );
+                  }
+
+                  if (wIdx === state.wordIndex) {
+                    const spans = mode === "krutidev" || mode === "gail" ? toKrutiSpans(word) : toGraphemeSpans(word);
+                    const typed = state.typed;
+
+                    return (
+                      <span key={wIdx} ref={activeWordRef} className="inline-flex">
+                        {spans.map((seg, sIdx) => {
+                          let className = t.untyped;
+                          let style;
+
+                          if (typed.length >= seg.end) {
+                            const typedSlice = typed.slice(seg.start, seg.end);
+                            className = typedSlice === seg.text ? t.correct : t.incorrect;
+                          } else if (typed.length >= seg.start) {
+                            className = `${t.untyped} border-l-2 animate-pulse`;
+                            style = { borderColor: t.cursor };
+                          }
+
+                          return (
+                            <span key={sIdx} className={className} style={style}>
+                              {seg.text}
+                            </span>
+                          );
+                        })}
+
+                        {typed.length > word.length && (
+                          <span className={`${t.incorrect} bg-red-500/10 rounded px-0.5`}>
+                            {typed.slice(word.length)}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  }
+
                   return (
-                    <span
-                      key={wIdx}
-                      className={result === "correct" ? t.correct : `${t.incorrect} underline decoration-2`}
-                    >
+                    <span key={wIdx} className={t.untyped}>
                       {word}
                     </span>
                   );
-                }
-
-                if (wIdx === state.wordIndex) {
-                  const spans = mode === "krutidev" || mode === "gail" ? toKrutiSpans(word) : toGraphemeSpans(word);
-                  const typed = state.typed;
-
-                  return (
-                    <span key={wIdx} ref={activeWordRef} className="inline-flex">
-                      {spans.map((seg, sIdx) => {
-                        let className = t.untyped;
-                        let style;
-
-                        if (typed.length >= seg.end) {
-                          const typedSlice = typed.slice(seg.start, seg.end);
-                          className = typedSlice === seg.text ? t.correct : t.incorrect;
-                        } else if (typed.length >= seg.start) {
-                          className = `${t.untyped} border-l-2 animate-pulse`;
-                          style = { borderColor: t.cursor };
-                        }
-
-                        return (
-                          <span key={sIdx} className={className} style={style}>
-                            {seg.text}
-                          </span>
-                        );
-                      })}
-
-                      {typed.length > word.length && (
-                        <span className={`${t.incorrect} bg-red-500/10 rounded px-0.5`}>
-                          {typed.slice(word.length)}
-                        </span>
-                      )}
-                    </span>
-                  );
-                }
-
-                return (
-                  <span key={wIdx} className={t.untyped}>
-                    {word}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-
-          <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} theme={theme} themeStyles={t} />
-
-          {customNotice && (
-            <p className={`text-center text-xs ${t.textMuted}`}>{customNotice}</p>
-          )}
-
-          {((nextKeyInfo?.altGr && mode === "mangal") ||
-            (nextKeyInfo?.altCode !== undefined && mode === "krutidev")) && (
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
-              <div className="text-center p-3 rounded-xl border border-yellow-500/40 bg-yellow-500/95 shadow-xl backdrop-blur">
-                <p className="text-sm text-black font-medium">
-                  {mode === "mangal" ? (
-                    <>
-                      ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
-                    </>
-                  ) : (
-                    <>
-                      ⚠️ यह विशेष अक्षर है — <strong>Alt दबाकर रखें</strong>, फिर नंबर-पैड पर <strong>0{nextKeyInfo.altCode}</strong> टाइप करें, फिर Alt छोड़ दें
-                    </>
-                  )}
-                </p>
+                })}
               </div>
             </div>
-          )}
 
-          <button onClick={() => reset()} className={`mx-auto text-sm underline ${t.textMuted}`}>
-            Reset
-          </button>
-        </>
-      )}
+            <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} theme={theme} themeStyles={t} />
+
+            {customNotice && (
+              <p className={`text-center text-xs ${t.textMuted}`}>{customNotice}</p>
+            )}
+
+            {((nextKeyInfo?.altGr && mode === "mangal") ||
+              (nextKeyInfo?.altCode !== undefined && mode === "krutidev")) && (
+              <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
+                <div className="text-center p-3 rounded-xl border border-yellow-500/40 bg-yellow-500/95 shadow-xl backdrop-blur">
+                  <p className="text-sm text-black font-medium">
+                    {mode === "mangal" ? (
+                      <>
+                        ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ यह विशेष अक्षर है — <strong>Alt दबाकर रखें</strong>, फिर नंबर-पैड पर <strong>0{nextKeyInfo.altCode}</strong> टाइप करें, फिर Alt छोड़ दें
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => reset()} className={`mx-auto text-sm underline ${t.textMuted}`}>
+              Reset
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
