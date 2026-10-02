@@ -13,6 +13,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [visitorTotal, setVisitorTotal] = useState(null);
   const settingsRef = useRef(null);
   const t = THEMES[theme];
 
@@ -24,6 +25,41 @@ export default function App() {
   useEffect(() => {
     if (autoRoomCode) setPage('multiplayer');
   }, [autoRoomCode]);
+
+  // Visitor counter: count a new browser once, then keep the total fresh
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchTotal = async () => {
+      try {
+        const r = await fetch('/api/visitors');
+        const d = await r.json();
+        if (!cancelled && d.ok) setVisitorTotal(d.total);
+      } catch {
+        // counter is optional — fail silently
+      }
+    };
+
+    const registerVisit = async () => {
+      try {
+        if (localStorage.getItem('th_visitor_number')) return;
+        const r = await fetch('/api/visit', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+          localStorage.setItem('th_visitor_number', String(d.number));
+        }
+      } catch {
+        // counter is optional — fail silently
+      }
+    };
+
+    registerVisit().then(fetchTotal);
+    const id = setInterval(fetchTotal, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // Capture install prompt
   useEffect(() => {
@@ -153,6 +189,17 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+
+          {/* Visitor Counter */}
+          {visitorTotal !== null && (
+            <div
+              className="px-2.5 py-1.5 rounded-lg text-xs opacity-80 border"
+              style={{ borderColor: 'rgba(128,128,128,0.3)' }}
+              title="Total visitors"
+            >
+              👥 {visitorTotal.toLocaleString('en-IN')}
+            </div>
+          )}
 
           {/* Install Button */}
           {installPrompt && !isInstalled && (

@@ -5,9 +5,34 @@ import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import rateLimit from 'express-rate-limit';
+import pg from 'pg';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
+
+// ============ DATABASE (visitor counter) ============
+const DATABASE_URL = process.env.DATABASE_URL;
+const pool = DATABASE_URL
+  ? new pg.Pool({
+      connectionString: DATABASE_URL,
+      ssl: DATABASE_URL.includes('railway.internal') ? false : { rejectUnauthorized: false },
+    })
+  : null;
+
+async function initDb() {
+  if (!pool) {
+    console.log('DATABASE_URL not set — visitor counter disabled');
+    return;
+  }
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS visitor_counter (id INT PRIMARY KEY, total BIGINT NOT NULL DEFAULT 0)`
+  );
+  await pool.query(
+    `INSERT INTO visitor_counter (id, total) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`
+  );
+  console.log('Visitor counter ready');
+}
+initDb().catch((err) => console.error('Visitor counter init failed:', err.message));
 
 const WORDS = [
   'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'it',
@@ -182,6 +207,14 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+// Stricter limiter for the visitor counter (a real user only calls it once)
+const visitLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/words', (req, res) => {
@@ -192,6 +225,34 @@ app.get('/api/words', (req, res) => {
     words.push(pool[i % pool.length]);
   }
   res.json({ words });
+});
+
+// ============ VISITOR COUNTER ============
+
+// New visitor: +1 and return their visitor number
+app.post('/api/visit', visitLimiter, async (_req, res) => {
+  if (!pool) return res.status(503).json({ ok: false });
+  try {
+    const result = await pool.query(
+      `UPDATE visitor_counter SET total = total + 1 WHERE id = 1 RETURNING total`
+    );
+    res.json({ ok: true, number: Number(result.rows[0].total) });
+  } catch (err) {
+    console.error('visit error:', err.message);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// Current total (does not change the count)
+app.get('/api/visitors', async (_req, res) => {
+  if (!pool) return res.status(503).json({ ok: false });
+  try {
+    const result = await pool.query(`SELECT total FROM visitor_counter WHERE id = 1`);
+    res.json({ ok: true, total: Number(result.rows[0]?.total || 0) });
+  } catch (err) {
+    console.error('visitors error:', err.message);
+    res.status(500).json({ ok: false });
+  }
 });
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
