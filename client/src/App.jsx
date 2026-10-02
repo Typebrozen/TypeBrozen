@@ -13,8 +13,6 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [particles, setParticles] = useState([]);
-  const [contentFading, setContentFading] = useState(false);
   const settingsRef = useRef(null);
   const t = THEMES[theme];
 
@@ -59,28 +57,6 @@ export default function App() {
       setIsInstalled(true);
       setInstallPrompt(null);
     }
-  };
-
-  const switchLanguage = (lang) => {
-    if (lang === language) return;
-
-    const newParticles = Array.from({ length: 24 }, (_, i) => ({
-      id: `${Date.now()}-${i}`,
-      x: (Math.random() - 0.5) * 220,
-      y: (Math.random() - 0.5) * 90 - 30,
-      delay: Math.random() * 0.12,
-      size: 3 + Math.random() * 5,
-      color: Math.random() > 0.5 ? '#facc15' : '#ffffff',
-    }));
-    setParticles(newParticles);
-    setContentFading(true);
-
-    setTimeout(() => {
-      setLanguage(lang);
-      setContentFading(false);
-    }, 250);
-
-    setTimeout(() => setParticles([]), 700);
   };
 
   const {
@@ -166,38 +142,6 @@ export default function App() {
         .settings-spin:hover {
           transform: rotate(45deg) scale(1.1);
         }
-        @keyframes particleBurst {
-          0% {
-            transform: translate(0, 0) scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: translate(var(--px), var(--py)) scale(0);
-            opacity: 0;
-          }
-        }
-        .lang-particle {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          border-radius: 9999px;
-          pointer-events: none;
-          animation: particleBurst 0.6s ease-out forwards;
-        }
-        @keyframes contentFadeOut {
-          0% { opacity: 1; transform: scale(1); filter: blur(0px); }
-          100% { opacity: 0; transform: scale(0.97); filter: blur(4px); }
-        }
-        @keyframes contentFadeIn {
-          0% { opacity: 0; transform: scale(0.97); filter: blur(4px); }
-          100% { opacity: 1; transform: scale(1); filter: blur(0px); }
-        }
-        .content-fade-out {
-          animation: contentFadeOut 0.25s ease-in forwards;
-        }
-        .content-fade-in {
-          animation: contentFadeIn 0.35s ease-out forwards;
-        }
       `}</style>
 
       <header className="px-4 py-3 flex items-center justify-between gap-2 relative">
@@ -272,35 +216,20 @@ export default function App() {
 
       {/* Language Toggle — centered, only on typing page, sits right above the typing test's own controls */}
       {page === 'typing' && (
-        <div className="relative flex justify-center gap-1 pb-2">
+        <div className="flex justify-center gap-1 pb-2">
           <button
-            onClick={() => switchLanguage('en')}
+            onClick={() => setLanguage('en')}
             className={`btn-hover px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'en' ? t.activebtn : t.btn}`}
           >
             English
           </button>
           <button
-            onClick={() => switchLanguage('hi')}
+            onClick={() => setLanguage('hi')}
             className={`btn-hover px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${language === 'hi' ? t.activebtn : t.btn}`}
             style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
           >
             हिंदी
           </button>
-
-          {particles.map((p) => (
-            <span
-              key={p.id}
-              className="lang-particle"
-              style={{
-                width: p.size,
-                height: p.size,
-                backgroundColor: p.color,
-                animationDelay: `${p.delay}s`,
-                '--px': `${p.x}px`,
-                '--py': `${p.y}px`,
-              }}
-            />
-          ))}
         </div>
       )}
 
@@ -319,10 +248,7 @@ export default function App() {
       >
         <div aria-hidden="true" />
 
-        <div
-          key={language}
-          className={`flex flex-col px-4 pb-6 min-w-0 ${contentFading ? 'content-fade-out' : 'content-fade-in'}`}
-        >
+        <div className="flex flex-col px-4 pb-6 min-w-0">
 
         {/* Typing Pages */}
         {page === 'typing' && language === 'en' && (
