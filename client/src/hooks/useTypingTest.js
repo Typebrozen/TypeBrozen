@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-import keySoundFile from '../assets/key.mp3';
-import errorSoundFile from '../assets/error.mp3';
-import finishSoundFile from '../assets/finish.mp3';
-
-const keySound = new Audio(keySoundFile);
-const errorSound = new Audio(errorSoundFile);
-const finishSound = new Audio(finishSoundFile);
-
-keySound.volume = 0.08;
-errorSound.volume = 0.12;
-finishSound.volume = 0.2;
+import { playKeySound, playWrongSound, playVictorySound } from '../utils/sounds';
 
 const WORD_COUNT = 200;
 const REFILL_THRESHOLD = 30;
@@ -93,8 +82,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     if (isFinishingRef.current) return;
     isFinishingRef.current = true;
     stopAllTimers();
-    finishSound.currentTime = 0;
-    finishSound.play().catch(() => {});
+    playVictorySound();
     const elapsed = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
     const stats = calcNetWpm(elapsed);
     const consistency = calculateConsistencyScore(wpmHistoryRef.current);
@@ -229,8 +217,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
       setTypedWords(prev => ({ ...prev, [wordIndex]: typedWord })); // ✅ NEW
 
       if (isCorrect) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
+        playKeySound();
         setCorrectWords(c => c + 1);
         setCurrentStreak(prev => {
           const newStreak = prev + 1;
@@ -238,8 +225,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
           return newStreak;
         });
       } else {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
+        playWrongSound();
         setIncorrectWords(c => c + 1);
         setCurrentStreak(0);
         typedWord.split('').forEach((char, i) => {
@@ -264,12 +250,10 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
       const newChar = value[value.length - 1];
       const charIndex = value.length - 1;
       if (charIndex < currentWord.length && newChar === currentWord[charIndex]) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
+        playKeySound();
       } else {
         isCurrentWordWrong.current = true;
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
+        playWrongSound();
         trackKeyError(newChar);
       }
     }
