@@ -3,6 +3,7 @@ import TypingTest from './components/TypingTest';
 import HindiTypingTest from './components/HindiTypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
+import ExamHall from './exam/ExamHall';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
 import { THEMES } from './theme';
 
@@ -180,7 +181,7 @@ export default function App() {
         }
       `}</style>
 
-      <header className="px-4 py-3 flex items-center justify-between gap-2 relative">
+      <header className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap relative">
         <div>
           <h1 className={`text-xl font-semibold tracking-tight logo-bounce-in ${t.header}`}>
             <span className="glow-type">Type</span>
@@ -200,6 +201,14 @@ export default function App() {
               👥 {visitorTotal.toLocaleString('en-IN')}
             </div>
           )}
+
+          {/* Exam Hall Button */}
+          <button
+            onClick={() => setPage(page === 'exam' ? 'typing' : 'exam')}
+            className={`btn-hover px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${page === 'exam' ? t.activebtn : t.btn}`}
+          >
+            {page === 'exam' ? '⌨️ Typing' : '📝 Exam Hall'}
+          </button>
 
           {/* Install Button */}
           {installPrompt && !isInstalled && (
@@ -304,6 +313,15 @@ export default function App() {
 
         {page === 'typing' && language === 'hi' && (
           <HindiTypingTest theme={theme} themeStyles={t} />
+        )}
+
+        {/* Exam Hall */}
+        {page === 'exam' && (
+          <ExamHall
+            theme={theme}
+            themeStyles={t}
+            onBack={() => setPage('typing')}
+          />
         )}
 
         {/* Multiplayer */}
