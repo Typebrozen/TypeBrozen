@@ -19,6 +19,14 @@ const MODE_TRANSITION_STYLE = `
   .mode-fade-in {
     animation: modeFadeSlideIn 0.32s ease-out both;
   }
+  @keyframes comboPop {
+    0% { transform: scale(0.7); opacity: 0.4; }
+    60% { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .combo-pop {
+    animation: comboPop 0.25s ease-out both;
+  }
 `;
 
 const QUOTES = {
@@ -214,7 +222,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
   const {
     words, loading, error, input, wordIndex,
     timeLeft, finished, wpm, accuracy,
-    consistencyScore, bestStreak, personalBest,
+    consistencyScore, bestStreak, combo, personalBest,
     isNewRecord, keyErrors, wordStatuses, typedWords, wpmHistory,
     handleInput, reset, getCharStatus, loadWords,
   } = useTypingTest(mode, customWords, selectedTime);
@@ -802,6 +810,15 @@ export default function TypingTest({ theme, themeStyles: t }) {
               <Stat label="time" value={formattedTime} />
               <Stat label="wpm" value={wpm} />
               <Stat label="acc" value={accuracy} />
+            </div>
+
+            {/* 🔥 Combo badge: 3 lagatar sahi words ke baad dikhta hai */}
+            <div className="h-7 -mt-3 flex items-center justify-center">
+              {combo >= 3 && (
+                <span key={combo} className={`combo-pop text-sm font-bold ${colors.textNormal}`}>
+                  🔥 Combo x{combo}
+                </span>
+              )}
             </div>
 
             <div className="relative">

@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { playKeySound, playWrongSound, playVictorySound } from '../utils/sounds';
+import {
+  playKeySound,
+  playWrongSound,
+  playVictorySound,
+  playComboSound,
+  playMilestoneSound,
+  playComboBreakSound,
+} from '../utils/sounds';
 
 const WORD_COUNT = 200;
 const REFILL_THRESHOLD = 30;
+const MILESTONE_EVERY = 10; // har itne sahi words par celebration sound
+const COMBO_BREAK_MIN = 5; // itni streak ke baad tootne par "whoomp" sound
 
 export default function useTypingTest(mode = 'time', customWords = [], duration = 60) {
   const [words, setWords] = useState([]);
@@ -21,6 +30,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
   const [accuracy, setAccuracy] = useState(100);
   const [bestStreak, setBestStreak] = useState(0);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [combo, setCombo] = useState(0);
   const [consistencyScore, setConsistencyScore] = useState(0);
   const [wpmHistory, setWpmHistory] = useState([]);
   const [personalBest, setPersonalBest] = useState(() => {
@@ -41,6 +51,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
   const isFinishingRef = useRef(false);
   const wpmHistoryRef = useRef([]);
   const isFetchingMoreRef = useRef(false);
+  const comboRef = useRef(0);
 
   correctWordsRef.current = correctWords;
   incorrectWordsRef.current = incorrectWords;
@@ -177,6 +188,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     wpmHistoryRef.current = [];
     lastWpmUpdateRef.current = 0;
     isCurrentWordWrong.current = false;
+    comboRef.current = 0;
     setInput('');
     setWordIndex(0);
     setCorrectWords(0);
@@ -190,6 +202,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     setAccuracy(100);
     setBestStreak(0);
     setCurrentStreak(0);
+    setCombo(0);
     setWpmHistory([]);
     setConsistencyScore(0);
     setIsNewRecord(false);
@@ -217,7 +230,14 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
       setTypedWords(prev => ({ ...prev, [wordIndex]: typedWord })); // ✅ NEW
 
       if (isCorrect) {
-        playKeySound();
+        comboRef.current += 1;
+        const streak = comboRef.current;
+        if (streak % MILESTONE_EVERY === 0) {
+          playMilestoneSound();
+        } else {
+          playComboSound(streak);
+        }
+        setCombo(streak);
         setCorrectWords(c => c + 1);
         setCurrentStreak(prev => {
           const newStreak = prev + 1;
@@ -225,7 +245,13 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
           return newStreak;
         });
       } else {
-        playWrongSound();
+        if (comboRef.current >= COMBO_BREAK_MIN) {
+          playComboBreakSound();
+        } else {
+          playWrongSound();
+        }
+        comboRef.current = 0;
+        setCombo(0);
         setIncorrectWords(c => c + 1);
         setCurrentStreak(0);
         typedWord.split('').forEach((char, i) => {
@@ -291,6 +317,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
     accuracy,
     consistencyScore,
     bestStreak,
+    combo,
     personalBest,
     isNewRecord,
     keyErrors,
