@@ -66,6 +66,20 @@ function prepareBuffers(c) {
   }
 }
 
+// Ek note bajane ka helper
+function tone(c, freq, start, dur, type = 'sine', vol = 0.2) {
+  const o = c.createOscillator();
+  o.type = type;
+  o.frequency.value = freq;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+  o.connect(g).connect(c.destination);
+  o.start(start);
+  o.stop(start + dur + 0.05);
+}
+
 // ⌨️ Mechanical keyboard click
 export function playKeySound() {
   if (!enabled) return;
@@ -131,18 +145,8 @@ export function playVictorySound() {
   if (!c) return;
   const t0 = c.currentTime + 0.02;
 
-  const note = (freq, start, dur, type = 'triangle', vol = 0.22) => {
-    const o = c.createOscillator();
-    o.type = type;
-    o.frequency.value = freq;
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t0 + start);
-    g.gain.exponentialRampToValueAtTime(vol, t0 + start + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + start + dur);
-    o.connect(g).connect(c.destination);
-    o.start(t0 + start);
-    o.stop(t0 + start + dur + 0.05);
-  };
+  const note = (freq, start, dur, type = 'triangle', vol = 0.22) =>
+    tone(c, freq, t0 + start, dur, type, vol);
 
   // C5 E5 G5 C6 arpeggio
   note(523.25, 0.0, 0.25);
@@ -155,4 +159,63 @@ export function playVictorySound() {
   note(659.25, 0.55, 1.0, 'triangle', 0.2);
   note(783.99, 0.55, 1.0, 'triangle', 0.2);
   note(1046.5, 0.55, 1.1, 'sine', 0.22);
+}
+
+// ✨ COMBO: sahi word par "ting", lagatar sahi words par pitch seedhi ki tarah upar chadhta hai
+const COMBO_SCALE = [
+  523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51,
+]; // C D E G A C D E (pentatonic, hamesha sureeli lagti hai)
+
+export function playComboSound(streak = 1) {
+  if (!enabled) return;
+  const c = getCtx();
+  if (!c) return;
+  const t = c.currentTime;
+
+  const idx = Math.max(0, streak - 1) % COMBO_SCALE.length;
+  const level = Math.floor(Math.max(0, streak - 1) / COMBO_SCALE.length); // har 8 words par ek level
+  const f = COMBO_SCALE[idx];
+
+  tone(c, f, t, 0.18, 'triangle', 0.16);
+  tone(c, f * 2, t, 0.12, 'sine', 0.06); // chamak (sparkle)
+
+  // Level badhne par halki si extra shimmer
+  if (level >= 1) tone(c, f * 3, t + 0.02, 0.15, 'sine', 0.04 + Math.min(level, 3) * 0.015);
+}
+
+// 🎉 MILESTONE: har 10 sahi words par mini celebration
+export function playMilestoneSound() {
+  if (!enabled) return;
+  const c = getCtx();
+  if (!c) return;
+  const t0 = c.currentTime + 0.03;
+
+  tone(c, 783.99, t0, 0.14, 'triangle', 0.18);
+  tone(c, 987.77, t0 + 0.09, 0.14, 'triangle', 0.18);
+  tone(c, 1174.66, t0 + 0.18, 0.14, 'triangle', 0.18);
+  tone(c, 1567.98, t0 + 0.27, 0.35, 'sine', 0.2);
+  tone(c, 783.99, t0 + 0.27, 0.35, 'triangle', 0.12);
+}
+
+// 💔 COMBO BREAK: badi streak tootne par neeche girta "whoomp"
+export function playComboBreakSound() {
+  if (!enabled) return;
+  const c = getCtx();
+  if (!c) return;
+  const t = c.currentTime;
+
+  const o = c.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(420, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.35);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(1800, t);
+  lp.frequency.exponentialRampToValueAtTime(200, t + 0.35);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.28, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  o.connect(lp).connect(g).connect(c.destination);
+  o.start(t);
+  o.stop(t + 0.45);
 }

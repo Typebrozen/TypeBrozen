@@ -11,17 +11,14 @@ import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraph
 import VirtualKeyboard from "./VirtualKeyboard";
 import ExamMode from "./ExamMode";
 import { downloadResultPdf } from "../utils/downloadPdf";
-
-import keySoundFile from '../assets/key.mp3';
-import errorSoundFile from '../assets/error.mp3';
-import finishSoundFile from '../assets/finish.mp3';
-
-const keySound = new Audio(keySoundFile);
-const errorSound = new Audio(errorSoundFile);
-const finishSound = new Audio(finishSoundFile);
-keySound.volume = 0.08;
-errorSound.volume = 0.12;
-finishSound.volume = 0.2;
+import {
+  playKeySound,
+  playWrongSound,
+  playVictorySound,
+  playComboSound,
+  playMilestoneSound,
+  playComboBreakSound,
+} from "../utils/sounds";
 
 const IGNORED_KEYS = new Set([
   "Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape",
@@ -44,6 +41,8 @@ const MODE_LABELS = {
 
 const DEFAULT_MINUTES = 1;
 const MIN_WORDS = 70;
+const MILESTONE_EVERY = 10; // har itne sahi words par celebration sound
+const COMBO_BREAK_MIN = 5; // itni streak ke baad tootne par "whoomp" sound
 
 // Shared fade/slide-in animation for mode switches (Time / Custom / Exam)
 const MODE_TRANSITION_STYLE = `
@@ -59,6 +58,14 @@ const MODE_TRANSITION_STYLE = `
   }
   .mode-fade-in {
     animation: modeFadeSlideIn 0.32s ease-out both;
+  }
+  @keyframes comboPop {
+    0% { transform: scale(0.7); opacity: 0.4; }
+    60% { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .combo-pop {
+    animation: comboPop 0.25s ease-out both;
   }
 `;
 
@@ -96,6 +103,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   const [customReady, setCustomReady] = useState(false);
   const [customNotice, setCustomNotice] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [comboDisplay, setComboDisplay] = useState(0);
 
   const [state, setState] = useState(() =>
     createInitialState(randomParagraph(HINDI_PARAGRAPHS), DEFAULT_MINUTES * 60 * 1000)
@@ -107,6 +115,8 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const hiddenInputRef = useRef(null);
 
+  const comboRef = useRef(0);
+
   const typedTrackRef = useRef(state.typed);
   const currentWordRef = useRef(state.words[state.wordIndex] ?? "");
   useEffect(() => {
@@ -117,8 +127,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   const prevFinishedRef = useRef(state.finished);
   useEffect(() => {
     if (state.finished && !prevFinishedRef.current) {
-      finishSound.currentTime = 0;
-      finishSound.play().catch(() => {});
+      playVictorySound();
     }
     prevFinishedRef.current = state.finished;
   }, [state.finished]);
@@ -153,6 +162,8 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const reset = useCallback(
     (durationSeconds = selectedTime, activeMode = mode) => {
+      comboRef.current = 0;
+      setComboDisplay(0);
       if (testMode === "custom" && customReady) {
         const { paragraph } = prepareCustomParagraph(customText, activeMode === "gail" ? "krutidev" : activeMode);
         setState(createInitialState(paragraph, durationSeconds * 1000));
@@ -195,6 +206,8 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         ? `${skippedCount} शब्द अभी छोड़ दिए गए हैं — जल्द ही सपोर्ट होंगे 🙂`
         : null
     );
+    comboRef.current = 0;
+    setComboDisplay(0);
     setState(createInitialState(paragraph, selectedTime * 1000));
     setCustomReady(true);
     setNow(Date.now());
@@ -230,11 +243,9 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     function playSoundFor(charToAppend) {
       const expectedChar = currentWordRef.current[typedTrackRef.current.length];
       if (charToAppend === expectedChar) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
+        playKeySound();
       } else {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
+        playWrongSound();
       }
     }
 
@@ -253,11 +264,22 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       if (e.code === "Space") {
         const isWordCorrect = typedTrackRef.current === currentWordRef.current;
         if (isWordCorrect) {
-          keySound.currentTime = 0;
-          keySound.play().catch(() => {});
+          comboRef.current += 1;
+          const streak = comboRef.current;
+          if (streak % MILESTONE_EVERY === 0) {
+            playMilestoneSound();
+          } else {
+            playComboSound(streak);
+          }
+          setComboDisplay(streak);
         } else {
-          errorSound.currentTime = 0;
-          errorSound.play().catch(() => {});
+          if (comboRef.current >= COMBO_BREAK_MIN) {
+            playComboBreakSound();
+          } else {
+            playWrongSound();
+          }
+          comboRef.current = 0;
+          setComboDisplay(0);
         }
         setState((prev) => commitWord(prev));
         setNow(Date.now());
@@ -555,6 +577,16 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
             <div className="text-center">
               <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
+              <div className="h-7 mt-1 flex items-center justify-center">
+                {comboDisplay >= 3 && (
+                  <span
+                    key={comboDisplay}
+                    className={`combo-pop text-sm font-bold ${t.textNormal}`}
+                  >
+                    🔥 Combo x{comboDisplay}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className={`p-8 shadow-xl ${t.glassCard}`}>
