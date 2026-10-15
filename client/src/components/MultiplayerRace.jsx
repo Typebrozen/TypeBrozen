@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { jsPDF } from 'jspdf';
-import keySoundFile from '../assets/key.mp3';
-import errorSoundFile from '../assets/error.mp3';
-import finishSoundFile from '../assets/finish.mp3';
-
-const keySound = new Audio(keySoundFile);
-const errorSound = new Audio(errorSoundFile);
-const finishSound = new Audio(finishSoundFile);
-keySound.volume = 0.08;
-errorSound.volume = 0.12;
-finishSound.volume = 0.2;
+import { playKeySound, playWrongSound, playVictorySound } from '../utils/sounds';
 
 export default function MultiplayerRace({
   theme, themeStyles: t, myId, roomState, raceText,
@@ -105,8 +96,7 @@ export default function MultiplayerRace({
       const stats = calcStats(now);
       setFinishStats(stats);
       setFinished(true); // this instantly disables the typing box (see disabled={finished || !raceStarted} below)
-      finishSound.currentTime = 0;
-      finishSound.play().catch(() => {});
+      playVictorySound();
       // completed:false because the paragraph was NOT fully typed — timer ran out first
       sendFinished(stats.wpm, stats.accuracy, now, false);
     }
@@ -144,13 +134,11 @@ export default function MultiplayerRace({
       setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
 
       if (isCorrect) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
+        playKeySound();
         setCorrectWords(c => c + 1);
         setCorrectChars(c => c + currentWord.length);
       } else {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
+        playWrongSound();
         setIncorrectWords(c => c + 1);
         setIncorrectChars(c => c + currentWord.length);
         // Save exactly what they typed vs. the correct word, for the report
@@ -169,8 +157,7 @@ export default function MultiplayerRace({
         const stats = calcStats(now);
         setFinishStats(stats);
         setFinished(true);
-        finishSound.currentTime = 0;
-        finishSound.play().catch(() => {});
+        playVictorySound();
         // completed:true because the whole paragraph was typed
         sendFinished(stats.wpm, stats.accuracy, now, true);
       }
@@ -182,11 +169,9 @@ export default function MultiplayerRace({
       const newChar = value[value.length - 1];
       const charIndex = value.length - 1;
       if (charIndex < currentWord.length && newChar === currentWord[charIndex]) {
-        keySound.currentTime = 0;
-        keySound.play().catch(() => {});
+        playKeySound();
       } else {
-        errorSound.currentTime = 0;
-        errorSound.play().catch(() => {});
+        playWrongSound();
       }
     }
 
