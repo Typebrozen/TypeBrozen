@@ -3,7 +3,6 @@ import {
   playKeySound,
   playWrongSound,
   playVictorySound,
-  playComboSound,
   playMilestoneSound,
   playComboBreakSound,
 } from '../utils/sounds';
@@ -235,7 +234,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
         if (streak % MILESTONE_EVERY === 0) {
           playMilestoneSound();
         } else {
-          playComboSound(streak);
+          playKeySound();
         }
         setCombo(streak);
         setCorrectWords(c => c + 1);
