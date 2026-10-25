@@ -1,221 +1,310 @@
-// client/src/utils/sounds.js
-// Saare sounds code se bante hain (Web Audio API). Koi audio file nahi, isliye delay almost zero.
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  playKeySound,
+  playWrongSound,
+  playSkipSound,
+  playVictorySound,
+} from '../utils/sounds';
 
-let ctx = null;
-let noiseBuffer = null;
-let guitarBuffer = null;
-let enabled = true;
+const WORD_COUNT = 200;
+const REFILL_THRESHOLD = 30;
 
-export function setSoundEnabled(value) {
-  enabled = !!value;
-}
+export default function useTypingTest(mode = 'time', customWords = [], duration = 60) {
+  const [words, setWords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [input, setInput] = useState('');
+  const [wordIndex, setWordIndex] = useState(0);
+  const [correctWords, setCorrectWords] = useState(0);
+  const [incorrectWords, setIncorrectWords] = useState(0);
+  const [wordStatuses, setWordStatuses] = useState({});
+  const [typedWords, setTypedWords] = useState({}); // ✅ NEW: what user actually typed per word
+  const [timeLeft, setTimeLeft] = useState(duration);
+  const [started, setStarted] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [wpm, setWpm] = useState(0);
+  const [accuracy, setAccuracy] = useState(100);
+  const [bestStreak, setBestStreak] = useState(0);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [consistencyScore, setConsistencyScore] = useState(0);
+  const [wpmHistory, setWpmHistory] = useState([]);
+  const [personalBest, setPersonalBest] = useState(() => {
+    const saved = localStorage.getItem('typing_personal_best');
+    return saved ? parseInt(saved) : 0;
+  });
+  const [isNewRecord, setIsNewRecord] = useState(false);
+  const [keyErrors, setKeyErrors] = useState({});
 
-export function isSoundEnabled() {
-  return enabled;
-}
+  const startTimeRef = useRef(null);
+  const intervalRef = useRef(null);
+  const countdownRef = useRef(null);
+  const correctWordsRef = useRef(0);
+  const incorrectWordsRef = useRef(0);
+  const durationRef = useRef(duration);
+  const isCurrentWordWrong = useRef(false);
+  const lastWpmUpdateRef = useRef(0);
+  const isFinishingRef = useRef(false);
+  const wpmHistoryRef = useRef([]);
+  const isFetchingMoreRef = useRef(false);
 
-function getCtx() {
-  if (!ctx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    ctx = new AC({ latencyHint: 'interactive' });
-  }
-  if (ctx.state === 'suspended') ctx.resume();
-  return ctx;
-}
+  correctWordsRef.current = correctWords;
+  incorrectWordsRef.current = incorrectWords;
 
-// Pehli click ya key par audio ko ready kar do, taaki pehle hi key par delay na ho
-export function unlockAudio() {
-  const c = getCtx();
-  if (c) prepareBuffers(c);
-}
+  useEffect(() => {
+    durationRef.current = duration;
+    setTimeLeft(duration);
+  }, [duration]);
 
-if (typeof window !== 'undefined') {
-  const unlock = () => {
-    unlockAudio();
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('keydown', unlock);
-  };
-  window.addEventListener('pointerdown', unlock);
-  window.addEventListener('keydown', unlock);
-}
+  const calcNetWpm = useCallback((elapsedMs) => {
+    const minutes = Math.max(elapsedMs / 60000, 1 / 60000);
+    const grossWpm = (correctWordsRef.current + incorrectWordsRef.current) / minutes;
+    const netWpm = Math.max(0, Math.round(correctWordsRef.current / minutes - incorrectWordsRef.current / minutes));
+    const total = correctWordsRef.current + incorrectWordsRef.current;
+    const accuracy = total === 0 ? 100 : Math.round((correctWordsRef.current / total) * 100);
+    return { wpm: netWpm, grossWpm: Math.round(grossWpm), accuracy };
+  }, []);
 
-function prepareBuffers(c) {
-  // Click ke liye white noise buffer
-  if (!noiseBuffer) {
-    const len = Math.floor(c.sampleRate * 0.06);
-    noiseBuffer = c.createBuffer(1, len, c.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-  }
+  const calculateConsistencyScore = useCallback((wpmValues) => {
+    if (wpmValues.length < 2) return 100;
+    const avg = wpmValues.reduce((a, b) => a + b, 0) / wpmValues.length;
+    if (avg === 0) return 100;
+    const variance = wpmValues.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / wpmValues.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = stdDev / avg;
+    return Math.max(0, Math.min(100, Math.round((1 - cv) * 100)));
+  }, []);
 
-  // Guitar pluck (Karplus-Strong) ek baar pehle se bana ke rakh lo
-  if (!guitarBuffer) {
-    const sr = c.sampleRate;
-    const freq = 146.83; // D3
-    const dur = 0.7;
-    const N = Math.round(sr / freq);
-    const total = Math.floor(sr * dur);
-    guitarBuffer = c.createBuffer(1, total, sr);
-    const d = guitarBuffer.getChannelData(0);
-    for (let i = 0; i < N; i++) d[i] = Math.random() * 2 - 1;
-    for (let i = N; i < total; i++) {
-      const prev = i - N - 1 >= 0 ? d[i - N - 1] : d[i - N];
-      d[i] = 0.5 * (d[i - N] + prev) * 0.997;
+  const trackKeyError = useCallback((char) => {
+    setKeyErrors(prev => ({ ...prev, [char]: (prev[char] || 0) + 1 }));
+  }, []);
+
+  const stopAllTimers = useCallback(() => {
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  }, []);
+
+  const finishTest = useCallback(() => {
+    if (isFinishingRef.current) return;
+    isFinishingRef.current = true;
+    stopAllTimers();
+    playVictorySound();
+    const elapsed = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+    const stats = calcNetWpm(elapsed);
+    const consistency = calculateConsistencyScore(wpmHistoryRef.current);
+    setFinished(true);
+    setStarted(false);
+    setWpm(stats.wpm);
+    setAccuracy(stats.accuracy);
+    setConsistencyScore(consistency);
+    setPersonalBest(prev => {
+      if (stats.wpm > prev && stats.wpm > 0) {
+        localStorage.setItem('typing_personal_best', stats.wpm.toString());
+        setIsNewRecord(true);
+        return stats.wpm;
+      }
+      return prev;
+    });
+  }, [stopAllTimers, calcNetWpm, calculateConsistencyScore]);
+
+  const loadWords = useCallback(async () => {
+    if (mode === 'custom') { setLoading(false); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/words?count=${WORD_COUNT}`);
+      if (!res.ok) throw new Error('Failed to load words');
+      const data = await res.json();
+      setWords(data.words);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }
-}
+  }, [mode]);
 
-// Ek note bajane ka helper
-function tone(c, freq, start, dur, type = 'sine', vol = 0.2) {
-  const o = c.createOscillator();
-  o.type = type;
-  o.frequency.value = freq;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.0001, start);
-  g.gain.exponentialRampToValueAtTime(vol, start + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-  o.connect(g).connect(c.destination);
-  o.start(start);
-  o.stop(start + dur + 0.05);
-}
+  useEffect(() => { loadWords(); }, [loadWords]);
 
-// ⌨️ Mechanical keyboard click
-export function playKeySound() {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  prepareBuffers(c);
-  const t = c.currentTime;
+  const ensureMoreWords = useCallback(async (totalWordCount, currentIndex) => {
+    if (mode === 'custom') return;
+    if (totalWordCount - currentIndex > REFILL_THRESHOLD) return;
+    if (isFetchingMoreRef.current) return;
 
-  // 1) Sharp "click" (noise burst)
-  const noise = c.createBufferSource();
-  noise.buffer = noiseBuffer;
-  noise.playbackRate.value = 0.9 + Math.random() * 0.3;
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = 2200 + Math.random() * 900;
-  bp.Q.value = 0.9;
-  const nGain = c.createGain();
-  nGain.gain.setValueAtTime(0.55, t);
-  nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-  noise.connect(bp).connect(nGain).connect(c.destination);
-  noise.start(t);
-  noise.stop(t + 0.05);
+    isFetchingMoreRef.current = true;
+    try {
+      const res = await fetch(`/api/words?count=${WORD_COUNT}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWords(prev => [...prev, ...data.words]);
+      }
+    } catch {
+      // Silent failure is fine
+    } finally {
+      isFetchingMoreRef.current = false;
+    }
+  }, [mode]);
 
-  // 2) Low "thock" (keyboard body ki awaaz)
-  const osc = c.createOscillator();
-  osc.type = 'sine';
-  const base = 170 + Math.random() * 30;
-  osc.frequency.setValueAtTime(base, t);
-  osc.frequency.exponentialRampToValueAtTime(65, t + 0.05);
-  const oGain = c.createGain();
-  oGain.gain.setValueAtTime(0.45, t);
-  oGain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-  osc.connect(oGain).connect(c.destination);
-  osc.start(t);
-  osc.stop(t + 0.08);
-}
+  // TIMER
+  useEffect(() => {
+    if (!started || finished) return;
+    countdownRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        const newTime = prev - 1;
+        if (newTime <= 0) {
+          setTimeout(() => finishTest(), 0);
+          return 0;
+        }
+        return newTime;
+      });
+    }, 1000);
 
-// 🎸 Galat key par guitar jaisa beep
-export function playWrongSound() {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  prepareBuffers(c);
-  const t = c.currentTime;
+    intervalRef.current = setInterval(() => {
+      if (!startTimeRef.current) return;
+      const elapsed = Date.now() - startTimeRef.current;
+      const stats = calcNetWpm(elapsed);
+      setWpm(stats.wpm);
+      setAccuracy(stats.accuracy);
+      const now = Math.floor(elapsed / 1000);
+      if (now - lastWpmUpdateRef.current >= 2 && now > 0) {
+        lastWpmUpdateRef.current = now;
+        wpmHistoryRef.current = [...wpmHistoryRef.current, stats.wpm];
+        setWpmHistory([...wpmHistoryRef.current]);
+        setConsistencyScore(calculateConsistencyScore(wpmHistoryRef.current));
+      }
+    }, 100);
 
-  const src = c.createBufferSource();
-  src.buffer = guitarBuffer;
-  const lp = c.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 2500;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.5, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-  src.connect(lp).connect(g).connect(c.destination);
-  src.start(t);
-  src.stop(t + 0.7);
-}
+    return () => stopAllTimers();
+  }, [started, finished, finishTest, calcNetWpm, calculateConsistencyScore, stopAllTimers]);
 
-// 🏆 Test khatam hone par victory sound
-export function playVictorySound() {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  const t0 = c.currentTime + 0.02;
+  const reset = useCallback(() => {
+    stopAllTimers();
+    isFinishingRef.current = false;
+    startTimeRef.current = null;
+    wpmHistoryRef.current = [];
+    lastWpmUpdateRef.current = 0;
+    isCurrentWordWrong.current = false;
+    setInput('');
+    setWordIndex(0);
+    setCorrectWords(0);
+    setIncorrectWords(0);
+    setWordStatuses({});
+    setTypedWords({}); // ✅ NEW
+    setTimeLeft(durationRef.current);
+    setStarted(false);
+    setFinished(false);
+    setWpm(0);
+    setAccuracy(100);
+    setBestStreak(0);
+    setCurrentStreak(0);
+    setWpmHistory([]);
+    setConsistencyScore(0);
+    setIsNewRecord(false);
+    setKeyErrors({});
+    loadWords();
+  }, [stopAllTimers, loadWords]);
 
-  const note = (freq, start, dur, type = 'triangle', vol = 0.22) =>
-    tone(c, freq, t0 + start, dur, type, vol);
+  const activeWords = mode === 'custom' ? customWords : words;
 
-  // C5 E5 G5 C6 arpeggio
-  note(523.25, 0.0, 0.25);
-  note(659.25, 0.12, 0.25);
-  note(783.99, 0.24, 0.25);
-  note(1046.5, 0.36, 0.3);
+  const handleInput = useCallback((value) => {
+    if (finished || activeWords.length === 0) return;
 
-  // Final victory chord
-  note(523.25, 0.55, 1.0, 'triangle', 0.2);
-  note(659.25, 0.55, 1.0, 'triangle', 0.2);
-  note(783.99, 0.55, 1.0, 'triangle', 0.2);
-  note(1046.5, 0.55, 1.1, 'sine', 0.22);
-}
+    if (!started && value.length > 0) {
+      setStarted(true);
+      startTimeRef.current = Date.now();
+    }
 
-// ✨ COMBO: sahi word par "ting", lagatar sahi words par pitch seedhi ki tarah upar chadhta hai
-const COMBO_SCALE = [
-  523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51,
-]; // C D E G A C D E (pentatonic, hamesha sureeli lagti hai)
+    const currentWord = activeWords[wordIndex] ?? '';
 
-export function playComboSound(streak = 1) {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  const t = c.currentTime;
+    // Space dabaya — word skip / next word
+    if (value.endsWith(' ')) {
+      const typedWord = value.trim();
+      const isCorrect = typedWord === currentWord;
 
-  const idx = Math.max(0, streak - 1) % COMBO_SCALE.length;
-  const level = Math.floor(Math.max(0, streak - 1) / COMBO_SCALE.length); // har 8 words par ek level
-  const f = COMBO_SCALE[idx];
+      setWordStatuses(prev => ({ ...prev, [wordIndex]: isCorrect ? 'correct' : 'incorrect' }));
+      setTypedWords(prev => ({ ...prev, [wordIndex]: typedWord })); // ✅ NEW
 
-  tone(c, f, t, 0.18, 'triangle', 0.16);
-  tone(c, f * 2, t, 0.12, 'sine', 0.06); // chamak (sparkle)
+      if (isCorrect) {
+        playSkipSound();
+        setCorrectWords(c => c + 1);
+        setCurrentStreak(prev => {
+          const newStreak = prev + 1;
+          setBestStreak(best => Math.max(best, newStreak));
+          return newStreak;
+        });
+      } else {
+        playWrongSound();
+        setIncorrectWords(c => c + 1);
+        setCurrentStreak(0);
+        typedWord.split('').forEach((char, i) => {
+          if (char !== currentWord[i]) trackKeyError(char);
+        });
+      }
 
-  // Level badhne par halki si extra shimmer
-  if (level >= 1) tone(c, f * 3, t + 0.02, 0.15, 'sine', 0.04 + Math.min(level, 3) * 0.015);
-}
+      const nextIndex = wordIndex + 1;
+      setWordIndex(nextIndex);
+      setInput('');
+      isCurrentWordWrong.current = false;
 
-// 🎉 MILESTONE: har 10 sahi words par mini celebration
-export function playMilestoneSound() {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  const t0 = c.currentTime + 0.03;
+      if (mode === 'custom' && nextIndex >= activeWords.length) {
+        finishTest();
+      } else if (mode !== 'custom') {
+        ensureMoreWords(activeWords.length, nextIndex);
+      }
+      return;
+    }
 
-  tone(c, 783.99, t0, 0.14, 'triangle', 0.18);
-  tone(c, 987.77, t0 + 0.09, 0.14, 'triangle', 0.18);
-  tone(c, 1174.66, t0 + 0.18, 0.14, 'triangle', 0.18);
-  tone(c, 1567.98, t0 + 0.27, 0.35, 'sine', 0.2);
-  tone(c, 783.99, t0 + 0.27, 0.35, 'triangle', 0.12);
-}
+    // Normal key press
+    if (value.length > input.length) {
+      const newChar = value[value.length - 1];
+      const charIndex = value.length - 1;
+      if (charIndex < currentWord.length && newChar === currentWord[charIndex]) {
+        playKeySound();
+      } else {
+        isCurrentWordWrong.current = true;
+        playWrongSound();
+        trackKeyError(newChar);
+      }
+    }
 
-// 💔 COMBO BREAK: badi streak tootne par neeche girta "whoomp"
-export function playComboBreakSound() {
-  if (!enabled) return;
-  const c = getCtx();
-  if (!c) return;
-  const t = c.currentTime;
+    setInput(value);
+  }, [finished, activeWords, wordIndex, input, started, finishTest, mode, trackKeyError, ensureMoreWords]);
 
-  const o = c.createOscillator();
-  o.type = 'sawtooth';
-  o.frequency.setValueAtTime(420, t);
-  o.frequency.exponentialRampToValueAtTime(70, t + 0.35);
-  const lp = c.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.setValueAtTime(1800, t);
-  lp.frequency.exponentialRampToValueAtTime(200, t + 0.35);
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.28, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-  o.connect(lp).connect(g).connect(c.destination);
-  o.start(t);
-  o.stop(t + 0.45);
+  const getCharStatus = useCallback((wIndex, charIndex) => {
+    const word = activeWords[wIndex];
+    if (!word) return 'pending';
+    if (wIndex > wordIndex) return 'pending';
+    if (wIndex < wordIndex) {
+      return wordStatuses[wIndex] === 'correct' ? 'correct' : 'incorrect';
+    }
+    const typed = input;
+    if (charIndex < typed.length) {
+      return typed[charIndex] === word[charIndex] ? 'correct' : 'incorrect';
+    }
+    if (charIndex === typed.length) return 'current';
+    return 'pending';
+  }, [wordIndex, activeWords, input, wordStatuses]);
+
+  return {
+    words: activeWords,
+    loading,
+    error,
+    input,
+    wordIndex,
+    wordStatuses,
+    typedWords, // ✅ NEW
+    timeLeft,
+    started,
+    finished,
+    wpm,
+    accuracy,
+    consistencyScore,
+    bestStreak,
+    personalBest,
+    isNewRecord,
+    keyErrors,
+    wpmHistory,
+    handleInput,
+    reset,
+    getCharStatus,
+    loadWords,
+  };
 }
