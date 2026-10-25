@@ -200,10 +200,10 @@ function sweep(c, t, { type = 'sine', from = 200, to = 70, vol = 0.4, dur = 0.07
 
 // ---------- 7 keyboard sound types ----------
 const KEY_PLAYERS = {
-  // ⌨️ Mechanical: crisp click + low thock
+  // ⌨️ Mechanical: crisp click (gehri thock hata di gayi hai)
   mechanical(c, t) {
-    noiseBurst(c, t, { freq: 2200 + Math.random() * 900, q: 0.9, vol: 0.55, dur: 0.04 });
-    sweep(c, t, { from: 170 + Math.random() * 30, to: 65, vol: 0.45, dur: 0.07 });
+    noiseBurst(c, t, { freq: 2600 + Math.random() * 900, q: 1.0, vol: 0.5, dur: 0.035 });
+    sweep(c, t, { type: 'triangle', from: 1000, to: 450, vol: 0.1, dur: 0.025 });
   },
 
   // 🔵 Blue Switch: tez, clicky, double-click
