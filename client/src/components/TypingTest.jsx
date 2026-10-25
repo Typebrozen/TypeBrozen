@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import useTypingTest from '../hooks/useTypingTest';
+import SoundControls from './SoundControls';
 
 const MODES = ['time', 'custom'];
 const TIME_OPTIONS = [1, 2, 3, 5, 10, 15, 20, 25];
@@ -713,6 +714,11 @@ export default function TypingTest({ theme, themeStyles: t }) {
   return (
     <div className="flex flex-col flex-1 max-w-5xl mx-auto w-full gap-6">
       <style>{MODE_TRANSITION_STYLE}</style>
+
+      {/* 🔊 Sound controls: mute, volume, keyboard sound picker */}
+      <div className="flex justify-end relative z-30">
+        <SoundControls themeStyles={colors} />
+      </div>
 
       {/* Mode Buttons — pinned, never animated itself */}
       <div className="flex justify-center gap-2 flex-wrap">
