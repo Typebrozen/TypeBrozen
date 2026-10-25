@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   playKeySound,
   playWrongSound,
-  playSkipSound,
   playVictorySound,
 } from '../utils/sounds';
 
@@ -214,7 +213,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
 
     const currentWord = activeWords[wordIndex] ?? '';
 
-    // Space dabaya — word skip / next word
+    // Space dabaya — next word
     if (value.endsWith(' ')) {
       const typedWord = value.trim();
       const isCorrect = typedWord === currentWord;
@@ -223,7 +222,7 @@ export default function useTypingTest(mode = 'time', customWords = [], duration 
       setTypedWords(prev => ({ ...prev, [wordIndex]: typedWord })); // ✅ NEW
 
       if (isCorrect) {
-        playSkipSound();
+        playKeySound();
         setCorrectWords(c => c + 1);
         setCurrentStreak(prev => {
           const newStreak = prev + 1;

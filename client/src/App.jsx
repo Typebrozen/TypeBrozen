@@ -3,6 +3,7 @@ import TypingTest from './components/TypingTest';
 import HindiTypingTest from './components/HindiTypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
+import SettingsPanel from './components/SettingsPanel';
 import ExamHall from './exam/ExamHall';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
 import { THEMES } from './theme';
@@ -233,37 +234,20 @@ export default function App() {
 
             {settingsOpen && (
               <div
-                className={`absolute right-0 mt-2 w-44 rounded-lg shadow-lg border p-2 flex flex-col gap-2 z-50 ${t.bg} ${t.text}`}
+                className={`absolute right-0 mt-2 w-72 max-h-[80vh] overflow-y-auto rounded-xl shadow-2xl border p-3 z-50 ${t.bg} ${t.text}`}
                 style={{ borderColor: 'rgba(128,128,128,0.3)' }}
               >
-                {/* Race Mode Toggle */}
-                <button
-                  onClick={() => {
+                <SettingsPanel
+                  themeStyles={t}
+                  theme={theme}
+                  themes={Object.keys(THEMES)}
+                  onThemeChange={setTheme}
+                  page={page}
+                  onRaceToggle={() => {
                     setPage(page === 'multiplayer' ? 'typing' : 'multiplayer');
                     setSettingsOpen(false);
                   }}
-                  className={`btn-hover px-3 py-1.5 rounded-lg text-xs text-left transition-colors ${page === 'multiplayer' ? t.activebtn : t.btn}`}
-                >
-                  {page === 'multiplayer' ? '⌨️ Back to Typing' : '🏁 Race Mode'}
-                </button>
-
-                <div className="h-px" style={{ backgroundColor: 'rgba(128,128,128,0.25)' }} />
-
-                {/* Theme Switcher */}
-                <div className="flex flex-col gap-1">
-                  {Object.keys(THEMES).map((th) => (
-                    <button
-                      key={th}
-                      onClick={() => {
-                        setTheme(th);
-                        setSettingsOpen(false);
-                      }}
-                      className={`btn-hover px-3 py-1.5 rounded-lg text-xs capitalize text-left transition-colors ${theme === th ? t.activebtn : t.btn}`}
-                    >
-                      {th}
-                    </button>
-                  ))}
-                </div>
+                />
               </div>
             )}
           </div>

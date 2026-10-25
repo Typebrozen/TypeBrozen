@@ -200,7 +200,7 @@ function sweep(c, t, { type = 'sine', from = 200, to = 70, vol = 0.4, dur = 0.07
 
 // ---------- 7 keyboard sound types ----------
 const KEY_PLAYERS = {
-  // ⌨️ Mechanical: crisp click (gehri thock hata di gayi hai)
+  // ⌨️ Mechanical: crisp click (gehri thock nahi hai)
   mechanical(c, t) {
     noiseBurst(c, t, { freq: 2600 + Math.random() * 900, q: 1.0, vol: 0.5, dur: 0.035 });
     sweep(c, t, { type: 'triangle', from: 1000, to: 450, vol: 0.1, dur: 0.025 });
@@ -276,15 +276,14 @@ export function previewKeySound(id) {
   playProfile(id);
 }
 
-// ␣ Space / word skip sound
+// ␣ Space / word skip sound — ab halki unchi "ting" (gehra thud hata diya)
 export function playSkipSound() {
   if (!canPlay()) return;
   const c = getCtx();
   if (!c) return;
-  prepareBuffers(c);
   const t = c.currentTime;
-  noiseBurst(c, t, { type: 'lowpass', freq: 1200, q: 0.7, vol: 0.35, dur: 0.05 });
-  sweep(c, t, { type: 'triangle', from: 320, to: 150, vol: 0.3, dur: 0.09 });
+  tone(c, 1568, t, 0.09, 'sine', 0.1); // G6, chhoti si ting
+  tone(c, 2349, t + 0.015, 0.07, 'sine', 0.05); // upar ki halki chamak
 }
 
 // 🎸 Galat key / galat word par guitar jaisa beep
