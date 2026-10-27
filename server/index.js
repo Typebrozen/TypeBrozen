@@ -186,8 +186,17 @@ function sanitizeEmoji(emoji) {
   return emoji.slice(0, 8);
 }
 
+// Clean a short text field for feedback (string only, no HTML, limited length)
+function cleanField(value, maxLen) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/<[^>]*>/g, '').trim().slice(0, maxLen);
+}
+
 // ============ EXPRESS APP ============
 const app = express();
+
+// Railway runs behind one proxy: needed so rate limiting sees the real user IP
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: [
@@ -215,6 +224,15 @@ const visitLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Strict limiter for feedback: 3 per minute per IP
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Too many requests. Please wait a minute.' },
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/words', (req, res) => {
@@ -225,6 +243,64 @@ app.get('/api/words', (req, res) => {
     words.push(pool[i % pool.length]);
   }
   res.json({ words });
+});
+
+// ============ FEEDBACK -> TELEGRAM ============
+const FEEDBACK_CATEGORIES = ['Bug', 'Suggestion', 'Other'];
+
+app.post('/api/feedback', feedbackLimiter, async (req, res) => {
+  const body = req.body || {};
+
+  // Honeypot: real users never fill this hidden field. Pretend success to bots.
+  if (typeof body.website === 'string' && body.website.trim() !== '') {
+    return res.json({ ok: true });
+  }
+
+  const message = cleanField(body.message, 1000);
+  if (message.length < 5) {
+    return res.status(400).json({ ok: false, error: 'Message is too short.' });
+  }
+
+  const category = FEEDBACK_CATEGORIES.includes(body.category) ? body.category : 'Other';
+  const contact = cleanField(body.contact, 100);
+  const page = cleanField(body.page, 60);
+  const device = cleanField(body.device, 30);
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.error('feedback: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set');
+    return res.status(503).json({ ok: false, error: 'Feedback is not available right now.' });
+  }
+
+  const text = [
+    '📩 New feedback from typehanuman',
+    '',
+    `Category: ${category}`,
+    `Page/Mode: ${page || 'unknown'}`,
+    `Device: ${device || 'unknown'}`,
+    `Contact: ${contact || 'not given'}`,
+    '',
+    'Message:',
+    message,
+  ].join('\n');
+
+  try {
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    if (!tgRes.ok) {
+      const errText = await tgRes.text();
+      console.error('feedback telegram error:', tgRes.status, errText);
+      return res.status(502).json({ ok: false, error: 'Could not send feedback.' });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('feedback error:', err.message);
+    res.status(500).json({ ok: false, error: 'Could not send feedback.' });
+  }
 });
 
 // ============ VISITOR COUNTER ============

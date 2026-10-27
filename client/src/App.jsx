@@ -4,6 +4,7 @@ import HindiTypingTest from './components/HindiTypingTest';
 import MultiplayerLobby from './components/MultiplayerLobby';
 import MultiplayerRace from './components/MultiplayerRace';
 import SettingsPanel from './components/SettingsPanel';
+import FeedbackModal from './components/FeedbackModal';
 import ExamHall from './exam/ExamHall';
 import useMultiplayer from './hooks/useMultiplayer.jsx';
 import { THEMES } from './theme';
@@ -15,6 +16,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [visitorTotal, setVisitorTotal] = useState(null);
   const settingsRef = useRef(null);
   const t = THEMES[theme];
@@ -105,6 +107,16 @@ export default function App() {
   } = useMultiplayer();
 
   const isInRace = raceStarted || (countdown !== null && countdown > 0) || raceFinished;
+
+  // Tells us (via feedback) which page/mode the user was on
+  const feedbackPageInfo =
+    page === 'typing'
+      ? language === 'en'
+        ? 'Typing Test (English)'
+        : 'Typing Test (Hindi)'
+      : page === 'exam'
+        ? 'Exam Hall'
+        : 'Multiplayer Race';
 
   return (
     <div className={`min-h-screen font-mono flex flex-col ${t.bg} ${t.text}`}>
@@ -202,6 +214,14 @@ export default function App() {
               👥 {visitorTotal.toLocaleString('en-IN')}
             </div>
           )}
+
+          {/* Feedback Button */}
+          <button
+            onClick={() => setFeedbackOpen(true)}
+            className={`btn-hover px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${t.btn}`}
+          >
+            💬 Feedback
+          </button>
 
           {/* Exam Hall Button */}
           <button
@@ -333,6 +353,25 @@ export default function App() {
 
         <div aria-hidden="true" />
       </main>
+
+      {/* Footer */}
+      <footer className="px-4 py-3 text-center text-xs opacity-70">
+        <button
+          onClick={() => setFeedbackOpen(true)}
+          className="underline hover:opacity-100"
+        >
+          Feedback / Contact
+        </button>
+      </footer>
+
+      {/* Feedback popup */}
+      {feedbackOpen && (
+        <FeedbackModal
+          themeStyles={t}
+          pageInfo={feedbackPageInfo}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
     </div>
   );
 }
