@@ -5,6 +5,11 @@ import SoundControls from './SoundControls';
 const MODES = ['time', 'custom'];
 const TIME_OPTIONS = [1, 2, 3, 5, 10, 15, 20, 25];
 
+// Weekly leaderboard settings (must match the server)
+const LEADERBOARD_SECONDS = 60; // only the 1 minute test counts
+const LEADERBOARD_MIN_ACCURACY = 85;
+const LEADERBOARD_SIZE = 10;
+
 // Shared fade/slide-in animation for mode switches (Time / Custom)
 const MODE_TRANSITION_STYLE = `
   @keyframes modeFadeSlideIn {
@@ -68,6 +73,17 @@ const PRESET_PARAGRAPHS = [
     text: 'In India many parents dream that their children will become engineers or doctors. This thinking has been common for many decades and comes from deep cultural economic and social reasons. Understanding why parents push their kids toward engineering helps us see the bigger picture of Indian society its values and its aspirations. Engineering has long been seen as a symbol of stability and success in India. After independence India focused heavily on industrialization and technical development. Institutions like the Indian Institutes of Technology were established and engineers became highly respected in society. Over time this created a cultural belief that engineering equals a good life. Parents who struggled financially naturally wanted their children to have secure well paying jobs. Engineering especially in fields like computer science electronics and mechanical offered exactly that kind of stability. A government or private sector engineering job meant a steady income housing allowance and social respect. Another big reason is social pressure and comparison. In many Indian communities parents are judged by what their children achieve. If a neighbor child becomes an engineer the family gains respect and status. This comparison culture pushes many parents to guide their children toward the same path without always considering the child individual interests or talents. Engineering colleges also became easier to access over time. With thousands of colleges across India getting an engineering degree became more achievable for middle class families. Parents saw it as a practical investment in their child future. However times are changing slowly. Many young people today are choosing careers in arts music design entrepreneurship and sports.',
   },
 ];
+
+// "4d 12h" / "5h 20m" / "12m"
+function formatResetTime(totalSeconds) {
+  const s = Math.max(0, Number(totalSeconds) || 0);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 function Stat({ label, value }) {
   return (
@@ -210,6 +226,15 @@ export default function TypingTest({ theme, themeStyles: t }) {
   const [selectedPreset, setSelectedPreset] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
+  // ---- Weekly leaderboard state ----
+  const [board, setBoard] = useState(null); // { top, champions, secondsLeft }
+  const [lbName, setLbName] = useState(() => {
+    try { return localStorage.getItem('th_lb_name') || ''; } catch { return ''; }
+  });
+  const [lbStatus, setLbStatus] = useState('idle'); // idle | submitting | done
+  const [lbError, setLbError] = useState('');
+  const [lbResult, setLbResult] = useState(null); // { rank, isChampion }
+
   const customWords = customText.trim().split(/\s+/).filter(Boolean);
 
   const {
@@ -233,6 +258,75 @@ export default function TypingTest({ theme, themeStyles: t }) {
     if (!active) return;
     active.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [wordIndex, input]);
+
+  // ---- Weekly leaderboard logic ----
+  const loadBoard = async () => {
+    try {
+      const res = await fetch('/api/leaderboard');
+      const data = await res.json();
+      if (data && data.ok) setBoard(data);
+    } catch {
+      // Leaderboard is optional: if it fails, the test still works normally
+    }
+  };
+
+  // Load once when the page opens (for the champion banner)
+  useEffect(() => {
+    loadBoard();
+  }, []);
+
+  // Reload fresh data every time a test finishes
+  useEffect(() => {
+    if (finished) {
+      setLbStatus('idle');
+      setLbError('');
+      setLbResult(null);
+      loadBoard();
+    }
+  }, [finished]);
+
+  const lbEligible =
+    mode === 'time' &&
+    selectedTime === LEADERBOARD_SECONDS &&
+    Number(accuracy) >= LEADERBOARD_MIN_ACCURACY &&
+    Number(wpm) >= 1;
+
+  const lbQualifies =
+    lbEligible &&
+    board &&
+    (board.top.length < LEADERBOARD_SIZE ||
+      Number(wpm) >= board.top[LEADERBOARD_SIZE - 1].wpm);
+
+  const submitScore = async () => {
+    if (lbStatus === 'submitting') return;
+    setLbStatus('submitting');
+    setLbError('');
+    try {
+      const res = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: lbName,
+          wpm,
+          accuracy,
+          duration: LEADERBOARD_SECONDS,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.ok) {
+        try { localStorage.setItem('th_lb_name', lbName.trim()); } catch { /* ignore */ }
+        setLbResult(data);
+        setLbStatus('done');
+        loadBoard();
+      } else {
+        setLbError((data && data.error) || 'Could not save score. Please try again.');
+        setLbStatus('idle');
+      }
+    } catch {
+      setLbError('Network problem. Please try again.');
+      setLbStatus('idle');
+    }
+  };
 
   const handleModeChange = (m) => {
     setMode(m);
@@ -676,6 +770,85 @@ export default function TypingTest({ theme, themeStyles: t }) {
           <ResultCard title="Best Streak" value={bestStreak} icon="🔥" theme={theme} subtitle="Error-free run" />
           <ResultCard title="Personal Best" value={personalBest} icon="🏆" theme={theme} subtitle={isNewRecord ? "NEW!" : "All time"} />
         </div>
+
+        {/* 🏆 Weekly leaderboard: name box (if Top 10) + current Top 10 */}
+        {lbEligible && board && (
+          <div className={`${colors.glassCard} p-5 w-full max-w-md`}>
+            {lbStatus === 'done' && lbResult ? (
+              <p className={`text-center font-medium mb-4 ${colors.textNormal}`}>
+                {lbResult.isChampion ? "👑 You are this week's Champion!" : `🎉 You are #${lbResult.rank} this week!`}
+              </p>
+            ) : lbQualifies ? (
+              <div className="flex flex-col gap-2 mb-4">
+                <p className={`text-center text-sm font-medium ${colors.textNormal}`}>
+                  🏆 You made the weekly Top 10! Enter your name
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={lbName}
+                    onChange={(e) => setLbName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitScore(); }}
+                    maxLength={15}
+                    placeholder="Your name"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className={`flex-1 min-w-0 rounded-xl px-4 py-2 text-sm outline-none ${colors.glassCard} ${colors.textNormal}`}
+                  />
+                  <button
+                    onClick={submitScore}
+                    disabled={lbStatus === 'submitting' || lbName.trim().length < 3}
+                    className={`px-5 py-2 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}
+                  >
+                    {lbStatus === 'submitting' ? '...' : 'Submit'}
+                  </button>
+                </div>
+                {lbError && <p className="text-xs text-red-400 text-center">{lbError}</p>}
+                <p className={`text-[10px] text-center ${colors.textMuted}`}>
+                  3 to 15 characters. Letters, numbers and spaces only.
+                </p>
+              </div>
+            ) : null}
+
+            {board.top.length > 0 && (
+              <>
+                <p className={`text-xs uppercase tracking-wider text-center mb-2 ${colors.textMuted}`}>
+                  Weekly Top 10 · resets in {formatResetTime(board.secondsLeft)}
+                </p>
+                <ol className="flex flex-col gap-1">
+                  {board.top.map((row, i) => {
+                    const mine =
+                      lbStatus === 'done' &&
+                      row.name.toLowerCase() === lbName.trim().toLowerCase();
+                    return (
+                      <li
+                        key={`${row.name}-${i}`}
+                        className={`flex items-center justify-between gap-3 text-sm px-3 py-1.5 rounded-lg ${colors.textNormal} ${mine ? 'bg-white/10 font-semibold' : ''}`}
+                      >
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="w-6 text-center">{['🥇', '🥈', '🥉'][i] || `${i + 1}.`}</span>
+                          <span className="truncate">{row.name}</span>
+                        </span>
+                        <span className="tabular-nums whitespace-nowrap">
+                          {row.wpm} <span className={`text-[10px] ${colors.textMuted}`}>WPM</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Hint when this test does not count for the leaderboard */}
+        {!lbEligible && mode === 'time' && (
+          <p className={`text-xs text-center ${colors.textMuted}`}>
+            {selectedTime !== LEADERBOARD_SECONDS
+              ? '🏆 Take the 1 min test to enter the weekly leaderboard'
+              : `🏆 Get ${LEADERBOARD_MIN_ACCURACY}%+ accuracy to enter the weekly leaderboard`}
+          </p>
+        )}
+
         <div className={`${colors.glassCard} p-4 w-full max-w-md text-center`}>
           <button onClick={() => setShowHeatmap(!showHeatmap)} className={`text-xs uppercase tracking-wider flex items-center gap-2 mx-auto ${colors.textMuted}`}>
             Problem Keys {showHeatmap ? '▲' : '▼'}
@@ -719,6 +892,24 @@ export default function TypingTest({ theme, themeStyles: t }) {
       <div className="flex justify-end relative z-30">
         <SoundControls themeStyles={colors} />
       </div>
+
+      {/* 👑 Weekly champion banner */}
+      {board && (
+        <div className={`${colors.glassCard} px-4 py-2.5 flex items-center justify-between gap-x-4 gap-y-1 flex-wrap text-xs ${colors.textNormal}`}>
+          <span>
+            {board.top.length > 0 ? (
+              <>
+                👑 Weekly Champion: <span className="font-semibold">{board.top[0].name}</span> · {board.top[0].wpm} WPM
+              </>
+            ) : (
+              <>👑 No champion yet this week. Take the 1 min test and be the first!</>
+            )}
+          </span>
+          <span className={colors.textMuted}>
+            Only the 1 min test counts · resets in {formatResetTime(board.secondsLeft)}
+          </span>
+        </div>
+      )}
 
       {/* Mode Buttons — pinned, never animated itself */}
       <div className="flex justify-center gap-2 flex-wrap">
