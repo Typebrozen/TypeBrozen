@@ -492,7 +492,7 @@ app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
     }
 
     // Insert, or improve this name's score for the week (never lowers it)
-    await pool.query(
+    const saved = await pool.query(
       `INSERT INTO weekly_scores (week_start, name, wpm, accuracy)
        VALUES (${WEEK_START_SQL}, $1, $2, $3)
        ON CONFLICT (week_start, lower(name))
@@ -521,7 +521,7 @@ app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
     );
     const rank = rankRes.rows[0].c + 1;
 
-    res.json({ ok: true, rank, isChampion: rank === 1, wpm: bestWpm });
+    res.json({ ok: true, rank, isChampion: rank === 1, wpm: bestWpm, improved: saved.rowCount > 0 });
   } catch (err) {
     console.error('leaderboard submit error:', err.message);
     res.status(500).json({ ok: false, error: 'Could not save score.' });
