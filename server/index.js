@@ -216,9 +216,9 @@ function cleanField(value, maxLen) {
 
 // ============ LEADERBOARD HELPERS ============
 const LEADERBOARD_DURATION = 60; // only the 1 minute English test counts
-const LEADERBOARD_SIZE = 10;     // Top 10 shown
+const LEADERBOARD_SIZE = 2;      // only 2 winners (1st and 2nd) are shown
 const MAX_REALISTIC_WPM = 250;   // anything above this is rejected as fake
-const MIN_ACCURACY = 85;         // below this accuracy the score does not count
+const MIN_ACCURACY = 90;         // below this accuracy the score does not count
 
 // Add more words here any time (lowercase, no spaces)
 const BLOCKED_WORDS = [
@@ -390,7 +390,7 @@ app.get('/api/visitors', async (_req, res) => {
 
 // ============ WEEKLY LEADERBOARD ============
 
-// Current week's Top 10 + time left + past weeks' champions (Hall of Fame)
+// Current week's winners + time left + past weeks' champions (Hall of Fame)
 app.get('/api/leaderboard', async (_req, res) => {
   if (!pool) return res.status(503).json({ ok: false });
   try {
@@ -442,7 +442,7 @@ app.get('/api/leaderboard', async (_req, res) => {
   }
 });
 
-// Submit a score (only counts if it lands in this week's Top 10)
+// Submit a score (only counts if it beats this week's winners)
 app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
   if (!pool) return res.status(503).json({ ok: false, error: 'Leaderboard is not available right now.' });
 
@@ -477,17 +477,18 @@ app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
   const accuracy = Math.round(accRaw * 10) / 10;
 
   try {
-    // How many OTHER players already have a better score this week?
+    // How many OTHER players already have an equal or better score this week?
+    // (earlier score wins a tie, so a tie with the last winner does not get in)
     const better = await pool.query(
       `SELECT COUNT(*)::int AS c
          FROM weekly_scores
         WHERE week_start = ${WEEK_START_SQL}
-          AND wpm > $1
+          AND wpm >= $1
           AND lower(name) <> lower($2)`,
       [wpm, name]
     );
     if (better.rows[0].c >= LEADERBOARD_SIZE) {
-      return res.json({ ok: false, error: "Score is not in this week's Top 10." });
+      return res.json({ ok: false, error: "Score did not beat this week's winners." });
     }
 
     // Insert, or improve this name's score for the week (never lowers it)
@@ -505,16 +506,18 @@ app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
 
     // Find the final rank of this name (based on the best score saved)
     const mine = await pool.query(
-      `SELECT wpm FROM weekly_scores
+      `SELECT wpm, created_at FROM weekly_scores
         WHERE week_start = ${WEEK_START_SQL} AND lower(name) = lower($1)`,
       [name]
     );
     const bestWpm = Number(mine.rows[0].wpm);
+    const myTime = mine.rows[0].created_at;
     const rankRes = await pool.query(
       `SELECT COUNT(*)::int AS c
          FROM weekly_scores
-        WHERE week_start = ${WEEK_START_SQL} AND wpm > $1`,
-      [bestWpm]
+        WHERE week_start = ${WEEK_START_SQL}
+          AND (wpm > $1 OR (wpm = $1 AND created_at < $2))`,
+      [bestWpm, myTime]
     );
     const rank = rankRes.rows[0].c + 1;
 

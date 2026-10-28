@@ -7,8 +7,8 @@ const TIME_OPTIONS = [1, 2, 3, 5, 10, 15, 20, 25];
 
 // Weekly leaderboard settings (must match the server)
 const LEADERBOARD_SECONDS = 60; // only the 1 minute test counts
-const LEADERBOARD_MIN_ACCURACY = 85;
-const LEADERBOARD_SIZE = 10;
+const LEADERBOARD_MIN_ACCURACY = 90;
+const LEADERBOARD_SIZE = 2; // only 2 winners: 1st and 2nd
 
 // Shared fade/slide-in animation for mode switches (Time / Custom)
 const MODE_TRANSITION_STYLE = `
@@ -270,11 +270,6 @@ export default function TypingTest({ theme, themeStyles: t }) {
     }
   };
 
-  // Load once when the page opens (for the champion banner)
-  useEffect(() => {
-    loadBoard();
-  }, []);
-
   // Reload fresh data every time a test finishes
   useEffect(() => {
     if (finished) {
@@ -295,7 +290,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
     lbEligible &&
     board &&
     (board.top.length < LEADERBOARD_SIZE ||
-      Number(wpm) >= board.top[LEADERBOARD_SIZE - 1].wpm);
+      Number(wpm) > board.top[LEADERBOARD_SIZE - 1].wpm);
 
   const submitScore = async () => {
     if (lbStatus === 'submitting') return;
@@ -771,8 +766,8 @@ export default function TypingTest({ theme, themeStyles: t }) {
           <ResultCard title="Personal Best" value={personalBest} icon="🏆" theme={theme} subtitle={isNewRecord ? "NEW!" : "All time"} />
         </div>
 
-        {/* 🏆 Weekly leaderboard: name box (if Top 10) + current Top 10 */}
-        {lbEligible && board && (
+        {/* 🏆 Weekly winners (1st and 2nd) + name box if you beat them */}
+        {mode === 'time' && board && (
           <div className={`${colors.glassCard} p-5 w-full max-w-md`}>
             {lbStatus === 'done' && lbResult ? (
               <p className={`text-center font-medium mb-4 ${colors.textNormal}`}>
@@ -781,7 +776,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
             ) : lbQualifies ? (
               <div className="flex flex-col gap-2 mb-4">
                 <p className={`text-center text-sm font-medium ${colors.textNormal}`}>
-                  🏆 You made the weekly Top 10! Enter your name
+                  🏆 You beat the weekly record! Enter your name
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -807,12 +802,27 @@ export default function TypingTest({ theme, themeStyles: t }) {
                   3 to 15 characters. Letters, numbers and spaces only.
                 </p>
               </div>
-            ) : null}
+            ) : lbEligible ? (
+              <p className={`text-center text-sm font-medium mb-4 ${colors.textNormal}`}>
+                👏 You typed well! But you did not beat this week's record yet.
+                {board.top[LEADERBOARD_SIZE - 1] && (
+                  <span className={`block text-xs font-normal mt-1 ${colors.textMuted}`}>
+                    You need more than {board.top[LEADERBOARD_SIZE - 1].wpm} WPM to get in. Try again!
+                  </span>
+                )}
+              </p>
+            ) : (
+              <p className={`text-center text-xs mb-4 ${colors.textMuted}`}>
+                {selectedTime !== LEADERBOARD_SECONDS
+                  ? '🏆 Take the 1 min test to enter the weekly leaderboard'
+                  : `🏆 Get ${LEADERBOARD_MIN_ACCURACY}%+ accuracy to enter the weekly leaderboard`}
+              </p>
+            )}
 
             {board.top.length > 0 && (
               <>
                 <p className={`text-xs uppercase tracking-wider text-center mb-2 ${colors.textMuted}`}>
-                  Weekly Top 10 · resets in {formatResetTime(board.secondsLeft)}
+                  Weekly Winners · resets in {formatResetTime(board.secondsLeft)}
                 </p>
                 <ol className="flex flex-col gap-1">
                   {board.top.map((row, i) => {
@@ -825,7 +835,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
                         className={`flex items-center justify-between gap-3 text-sm px-3 py-1.5 rounded-lg ${colors.textNormal} ${mine ? 'bg-white/10 font-semibold' : ''}`}
                       >
                         <span className="flex items-center gap-2 min-w-0">
-                          <span className="w-6 text-center">{['🥇', '🥈', '🥉'][i] || `${i + 1}.`}</span>
+                          <span className="w-6 text-center">{['🥇', '🥈'][i] || `${i + 1}.`}</span>
                           <span className="truncate">{row.name}</span>
                         </span>
                         <span className="tabular-nums whitespace-nowrap">
@@ -838,15 +848,6 @@ export default function TypingTest({ theme, themeStyles: t }) {
               </>
             )}
           </div>
-        )}
-
-        {/* Hint when this test does not count for the leaderboard */}
-        {!lbEligible && mode === 'time' && (
-          <p className={`text-xs text-center ${colors.textMuted}`}>
-            {selectedTime !== LEADERBOARD_SECONDS
-              ? '🏆 Take the 1 min test to enter the weekly leaderboard'
-              : `🏆 Get ${LEADERBOARD_MIN_ACCURACY}%+ accuracy to enter the weekly leaderboard`}
-          </p>
         )}
 
         <div className={`${colors.glassCard} p-4 w-full max-w-md text-center`}>
@@ -892,24 +893,6 @@ export default function TypingTest({ theme, themeStyles: t }) {
       <div className="flex justify-end relative z-30">
         <SoundControls themeStyles={colors} />
       </div>
-
-      {/* 👑 Weekly champion banner */}
-      {board && (
-        <div className={`${colors.glassCard} px-4 py-2.5 flex items-center justify-between gap-x-4 gap-y-1 flex-wrap text-xs ${colors.textNormal}`}>
-          <span>
-            {board.top.length > 0 ? (
-              <>
-                👑 Weekly Champion: <span className="font-semibold">{board.top[0].name}</span> · {board.top[0].wpm} WPM
-              </>
-            ) : (
-              <>👑 No champion yet this week. Take the 1 min test and be the first!</>
-            )}
-          </span>
-          <span className={colors.textMuted}>
-            Only the 1 min test counts · resets in {formatResetTime(board.secondsLeft)}
-          </span>
-        </div>
-      )}
 
       {/* Mode Buttons — pinned, never animated itself */}
       <div className="flex justify-center gap-2 flex-wrap">
