@@ -216,7 +216,7 @@ function cleanField(value, maxLen) {
 
 // ============ LEADERBOARD HELPERS ============
 const LEADERBOARD_DURATION = 60; // only the 1 minute English test counts
-const LEADERBOARD_SIZE = 2;      // only 2 winners (1st and 2nd) are shown
+const LEADERBOARD_SIZE = 1;      // only 1 winner (the weekly Champion) is shown
 const MAX_REALISTIC_WPM = 250;   // anything above this is rejected as fake
 const MIN_ACCURACY = 90;         // below this accuracy the score does not count
 
@@ -488,7 +488,7 @@ app.post('/api/leaderboard', leaderboardLimiter, async (req, res) => {
       [wpm, name]
     );
     if (better.rows[0].c >= LEADERBOARD_SIZE) {
-      return res.json({ ok: false, error: "Score did not beat this week's winners." });
+      return res.json({ ok: false, error: "Score did not beat this week's Champion." });
     }
 
     // Insert, or improve this name's score for the week (never lowers it)

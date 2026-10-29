@@ -8,7 +8,7 @@ const TIME_OPTIONS = [1, 2, 3, 5, 10, 15, 20, 25];
 // Weekly leaderboard settings (must match the server)
 const LEADERBOARD_SECONDS = 60; // only the 1 minute test counts
 const LEADERBOARD_MIN_ACCURACY = 90;
-const LEADERBOARD_SIZE = 2; // only 2 winners: 1st and 2nd
+const LEADERBOARD_SIZE = 1; // only 1 winner: the weekly Champion
 
 // Shared fade/slide-in animation for mode switches (Time / Custom)
 const MODE_TRANSITION_STYLE = `
@@ -27,16 +27,21 @@ const MODE_TRANSITION_STYLE = `
   }
 `;
 
-// Animations for the weekly winners card
+// Animations for the weekly Champion card
 const LEADERBOARD_STYLE = `
   @keyframes lbShimmer { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
   @keyframes lbFloat { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
   @keyframes lbGlow {
-    0%, 100% { box-shadow: 0 0 18px rgba(250, 204, 21, 0.18); }
-    50% { box-shadow: 0 0 34px rgba(250, 204, 21, 0.42); }
+    0%, 100% { box-shadow: 0 0 20px rgba(250, 204, 21, 0.20); }
+    50% { box-shadow: 0 0 40px rgba(250, 204, 21, 0.50); }
+  }
+  @keyframes lbFall {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translateY(280px) rotate(360deg); opacity: 0; }
   }
   .lb-gold-name {
-    background: linear-gradient(90deg, #d97706, #fbbf24, #fde68a, #fbbf24, #d97706);
+    background: linear-gradient(90deg, #eab308, #facc15, #fef08a, #facc15, #eab308);
     background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
@@ -46,7 +51,16 @@ const LEADERBOARD_STYLE = `
   }
   .lb-crown { display: inline-block; animation: lbFloat 2.4s ease-in-out infinite; }
   .lb-glow { animation: lbGlow 2.6s ease-in-out infinite; }
+  .lb-confetti { position: absolute; inset: 0; pointer-events: none; }
+  .lb-confetti span { position: absolute; top: 0; font-size: 18px; animation: lbFall 2.8s ease-in forwards; }
 `;
+
+// Confetti pieces for the moment someone takes the crown
+const CONFETTI = Array.from({ length: 18 }, (_, i) => ({
+  left: `${(i * 37) % 100}%`,
+  delay: `${(i % 6) * 0.18}s`,
+  emoji: ['🎉', '✨', '⭐', '🎊'][i % 4],
+}));
 
 const QUOTES = {
   beginner: [
@@ -175,36 +189,20 @@ function ProgressBar({ current, total, mode, timeLeft, duration, theme }) {
   );
 }
 
-function ResultCard({ title, value, icon, theme, subtitle }) {
-  const getCardStyle = () => {
-    if (theme === 'dark') return 'bg-white/5 border-white/10 hover:bg-white/10';
-    if (theme === 'sepia') return 'bg-black/10 border-amber-800/20 hover:bg-black/20';
-    return 'bg-black/5 border-gray-300/30 hover:bg-black/10';
-  };
-  const getTextColor = () => {
-    if (theme === 'dark') return 'text-white';
-    if (theme === 'sepia') return 'text-[#5a4a2e]';
-    return 'text-gray-800';
-  };
-  const getIconColor = () => {
-    if (theme === 'dark') return 'text-yellow-400';
-    if (theme === 'sepia') return 'text-amber-700';
-    return 'text-blue-600';
-  };
-  const getSubtitleColor = () => {
-    if (theme === 'dark') return 'text-white/40';
-    if (theme === 'sepia') return 'text-[#8a6e4a]';
-    return 'text-gray-500';
-  };
+function MiniStat({ icon, value, label, theme }) {
+  const box =
+    theme === 'dark' ? 'bg-white/5 border-white/10'
+    : theme === 'sepia' ? 'bg-black/10 border-amber-800/20'
+    : 'bg-black/5 border-gray-300/30';
+  const text =
+    theme === 'dark' ? 'text-white'
+    : theme === 'sepia' ? 'text-[#5a4a2e]'
+    : 'text-gray-800';
   return (
-    <div className={`group relative overflow-hidden rounded-2xl backdrop-blur-xl border p-6 min-w-[140px] text-center transition-all duration-300 hover:scale-105 ${getCardStyle()}`}>
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 bg-gradient-to-r from-transparent via-white to-transparent" />
-      <div className="relative z-10">
-        <div className={`text-3xl mb-2 ${getIconColor()}`}>{icon}</div>
-        <p className={`text-4xl font-bold tabular-nums ${getTextColor()}`}>{value}</p>
-        <p className={`text-xs uppercase tracking-wider opacity-60 mt-2 ${getTextColor()}`}>{title}</p>
-        {subtitle && <p className={`text-[10px] mt-1 ${getSubtitleColor()}`}>{subtitle}</p>}
-      </div>
+    <div className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 ${box} ${text}`}>
+      <span className="text-sm">{icon}</span>
+      <span className="text-sm font-semibold tabular-nums">{value}</span>
+      <span className="text-[9px] uppercase tracking-wider opacity-60">{label}</span>
     </div>
   );
 }
@@ -753,12 +751,11 @@ export default function TypingTest({ theme, themeStyles: t }) {
     }
   };
 
-  // ---- Weekly winners: helper values for the result screen ----
+  // ---- Weekly Champion: helper values for the result screen ----
   const champ = board && board.top[0] ? board.top[0] : null;
-  const runnerUp = board && board.top[1] ? board.top[1] : null;
   const myNameLower = lbName.trim().toLowerCase();
   const iAmChampion = lbStatus === 'done' && !!champ && champ.name.toLowerCase() === myNameLower;
-  const iAmRunnerUp = lbStatus === 'done' && !!runnerUp && runnerUp.name.toLowerCase() === myNameLower;
+  const justWonCrown = iAmChampion && !!lbResult && !!lbResult.improved;
   const gapToCrown =
     champ && !iAmChampion && Number(wpm) < champ.wpm
       ? Math.round((champ.wpm - Number(wpm)) * 10) / 10
@@ -793,38 +790,29 @@ export default function TypingTest({ theme, themeStyles: t }) {
           </div>
         )}
         <div className="text-center">
-          <p className={`text-[clamp(3rem,10vw,7rem)] font-bold tabular-nums ${
+          <p className={`text-[clamp(4.5rem,15vw,9rem)] font-bold tabular-nums ${
             theme === 'dark' ? 'text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400'
             : theme === 'sepia' ? 'text-transparent bg-clip-text bg-gradient-to-b from-[#5a4a2e] to-[#a0906e]'
             : 'text-transparent bg-clip-text bg-gradient-to-b from-gray-800 to-gray-400'
           }`}>{wpm}</p>
           <p className={`text-xs uppercase tracking-widest mt-2 ${colors.textMuted}`}>Words Per Minute</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-4 w-full">
-          <ResultCard title="Accuracy" value={`${accuracy}%`} icon="🎯" theme={theme} subtitle={accuracy >= 98 ? "Elite!" : accuracy >= 95 ? "Exceptional!" : "Great work!"} />
-          <ResultCard title="Consistency" value={`${consistencyScore}%`} icon="📊" theme={theme} subtitle="Speed stability" />
-          <ResultCard title="Best Streak" value={bestStreak} icon="🔥" theme={theme} subtitle="Error-free run" />
-          <ResultCard title="Personal Best" value={personalBest} icon="🏆" theme={theme} subtitle={isNewRecord ? "NEW!" : "All time"} />
-        </div>
-
-        {/* 🏆 Weekly winners (1st and 2nd) + name box if you beat them */}
+        {/* 👑 Weekly Champion: the big thing people want to beat */}
         {mode === 'time' && board && (
-          <div className={`${colors.glassCard} p-5 w-full max-w-md flex flex-col gap-4`}>
+          <div className="w-full max-w-md flex flex-col gap-3">
             <style>{LEADERBOARD_STYLE}</style>
 
-            {/* Message / name box */}
+            {/* Claim box / message */}
             {lbStatus === 'done' && lbResult ? (
-              <p className={`text-center font-medium ${colors.textNormal}`}>
+              <p className={`text-center text-sm font-semibold ${colors.textNormal}`}>
                 {lbResult.improved
-                  ? (lbResult.isChampion
-                      ? "👑 New Weekly Champion! The crown is yours!"
-                      : `🎉 You are #${lbResult.rank} this week!`)
-                  : `💪 Your best this week is still ${lbResult.wpm} WPM (#${lbResult.rank}). Beat it to climb higher!`}
+                  ? '🎉 You are the new Weekly Champion!'
+                  : `💪 Your best this week is still ${lbResult.wpm} WPM. You hold the crown!`}
               </p>
             ) : lbQualifies ? (
-              <div className="flex flex-col gap-2">
-                <p className={`text-center text-sm font-medium ${colors.textNormal}`}>
-                  🏆 You beat the weekly record! Enter your name
+              <div className={`${colors.glassCard} p-4 flex flex-col gap-2`}>
+                <p className="text-center text-sm font-semibold text-yellow-400">
+                  🔥 You beat the record! Enter your name to claim the crown
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -840,9 +828,9 @@ export default function TypingTest({ theme, themeStyles: t }) {
                   <button
                     onClick={submitScore}
                     disabled={lbStatus === 'submitting' || lbName.trim().length < 3}
-                    className={`px-5 py-2 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 ${theme === 'dark' ? 'bg-white text-black' : theme === 'sepia' ? 'bg-[#5a4a2e] text-white' : 'bg-gray-800 text-white'}`}
+                    className="px-5 py-2 rounded-xl text-sm font-bold bg-yellow-400 text-black transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
                   >
-                    {lbStatus === 'submitting' ? '...' : 'Submit'}
+                    {lbStatus === 'submitting' ? '...' : 'Claim 👑'}
                   </button>
                 </div>
                 {lbError && <p className="text-xs text-red-400 text-center">{lbError}</p>}
@@ -852,12 +840,7 @@ export default function TypingTest({ theme, themeStyles: t }) {
               </div>
             ) : lbEligible ? (
               <p className={`text-center text-sm font-medium ${colors.textNormal}`}>
-                {"👏 You typed well! But you did not beat this week's record yet."}
-                {board.top[LEADERBOARD_SIZE - 1] && (
-                  <span className={`block text-xs font-normal mt-1 ${colors.textMuted}`}>
-                    You need more than {board.top[LEADERBOARD_SIZE - 1].wpm} WPM to get in. Try again!
-                  </span>
-                )}
+                {"👏 You typed well, but you did not beat this week's record."}
               </p>
             ) : (
               <p className={`text-center text-xs ${colors.textMuted}`}>
@@ -867,61 +850,65 @@ export default function TypingTest({ theme, themeStyles: t }) {
               </p>
             )}
 
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-xs uppercase tracking-wider ${colors.textMuted}`}>🏆 Weekly Winners</span>
-              <span className={`text-[10px] px-2.5 py-1 rounded-full border border-white/10 ${colors.textMuted}`}>
-                ⏳ resets in {formatResetTime(board.secondsLeft)}
-              </span>
-            </div>
-
-            {/* 1st place: the Champion */}
+            {/* The Champion card */}
             {champ ? (
               <div
-                className={`lb-glow rounded-2xl px-4 py-5 text-center border ${iAmChampion ? 'border-yellow-400/80' : 'border-yellow-400/40'}`}
-                style={{ background: 'linear-gradient(180deg, rgba(250,204,21,0.16), rgba(250,204,21,0.03))' }}
+                className={`lb-glow relative overflow-hidden rounded-2xl px-4 py-6 text-center border ${iAmChampion ? 'border-yellow-400' : 'border-yellow-400/50'}`}
+                style={{ background: 'linear-gradient(180deg, rgba(250,204,21,0.18), rgba(250,204,21,0.04))' }}
               >
-                <div className="lb-crown text-4xl leading-none">👑</div>
-                <p className="text-[10px] uppercase tracking-[0.3em] mt-2 text-amber-500">Weekly Champion</p>
-                <p className="lb-gold-name text-3xl font-extrabold mt-1 truncate">{champ.name}</p>
-                <p className={`mt-1 text-sm tabular-nums ${colors.textNormal}`}>
-                  <span className="text-xl font-bold">{champ.wpm}</span> WPM · {champ.accuracy}% accuracy
-                </p>
-                {iAmChampion && (
-                  <span className="inline-block mt-2 text-[10px] font-semibold uppercase tracking-wider px-3 py-1 rounded-full bg-yellow-400 text-black">
-                    {"That's you! 🎉"}
-                  </span>
+                {justWonCrown && (
+                  <div className="lb-confetti" aria-hidden="true">
+                    {CONFETTI.map((p, i) => (
+                      <span key={i} style={{ left: p.left, animationDelay: p.delay }}>{p.emoji}</span>
+                    ))}
+                  </div>
                 )}
+                <div className="relative">
+                  <div className="lb-crown text-4xl leading-none">👑</div>
+                  <p className="text-[10px] uppercase tracking-[0.35em] mt-2 text-yellow-500">Weekly Champion</p>
+                  <p className="lb-gold-name text-4xl font-extrabold mt-1 truncate">{champ.name}</p>
+                  <p className={`mt-1 ${colors.textNormal}`}>
+                    <span className="text-3xl font-black tabular-nums text-yellow-400">{champ.wpm}</span>
+                    <span className="text-xs ml-1 opacity-70">WPM</span>
+                  </p>
+                  {iAmChampion && (
+                    <span className="inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-yellow-400 text-black">
+                      {"That's you! 🎉"}
+                    </span>
+                  )}
+                  {gapToCrown > 0 && selectedTime === LEADERBOARD_SECONDS ? (
+                    <p className={`mt-3 text-xs ${colors.textNormal}`}>
+                      ⚡ You are only <span className="font-bold text-yellow-400">{gapToCrown} WPM</span> away from taking the crown. One more try!
+                    </p>
+                  ) : lbEligible && !lbQualifies && !iAmChampion ? (
+                    <p className={`mt-3 text-xs ${colors.textNormal}`}>
+                      ⚡ Beat <span className="font-bold text-yellow-400">{champ.wpm} WPM</span> to take the crown!
+                    </p>
+                  ) : null}
+                  <p className={`mt-3 text-[10px] ${colors.textMuted}`}>
+                    ⏳ New champion race starts in {formatResetTime(board.secondsLeft)}
+                  </p>
+                </div>
               </div>
             ) : (
-              <div className="rounded-2xl px-4 py-5 text-center border border-dashed border-yellow-400/40">
-                <div className="text-3xl">👑</div>
-                <p className={`text-sm mt-1 ${colors.textNormal}`}>The crown is empty this week. Be the first Champion!</p>
+              <div className="rounded-2xl px-4 py-6 text-center border border-dashed border-yellow-400/50">
+                <div className="text-4xl">👑</div>
+                <p className={`text-sm mt-2 ${colors.textNormal}`}>The crown is empty this week. Be the first Champion!</p>
+                <p className={`mt-2 text-[10px] ${colors.textMuted}`}>
+                  ⏳ Week resets in {formatResetTime(board.secondsLeft)}
+                </p>
               </div>
-            )}
-
-            {/* 2nd place */}
-            {runnerUp && (
-              <div className={`flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 ${colors.textNormal} ${iAmRunnerUp ? 'ring-1 ring-slate-300/60' : ''}`}>
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="text-lg">🥈</span>
-                  <span className="truncate text-sm font-medium">{runnerUp.name}</span>
-                  {iAmRunnerUp && <span className="text-[10px] opacity-70">(you)</span>}
-                </span>
-                <span className="tabular-nums text-sm whitespace-nowrap">
-                  {runnerUp.wpm} <span className={`text-[10px] ${colors.textMuted}`}>WPM</span>
-                </span>
-              </div>
-            )}
-
-            {/* Gap to the crown: gives a reason to try again */}
-            {gapToCrown > 0 && selectedTime === LEADERBOARD_SECONDS && (
-              <p className={`text-center text-xs ${colors.textMuted}`}>
-                ⚡ You are just <span className="font-semibold text-amber-500">{gapToCrown} WPM</span> away from the crown. One more try!
-              </p>
             )}
           </div>
         )}
+
+        {/* Small stats: less important, so they stay small */}
+        <div className="flex flex-wrap justify-center gap-2 w-full">
+          <MiniStat icon="🎯" value={`${accuracy}%`} label="Accuracy" theme={theme} />
+          <MiniStat icon="📊" value={`${consistencyScore}%`} label="Consistency" theme={theme} />
+          <MiniStat icon="🔥" value={bestStreak} label="Streak" theme={theme} />
+          <MiniStat icon="🏆" value={personalBest} label="Best" theme={theme} />
+        </div>
 
         <div className={`${colors.glassCard} p-4 w-full max-w-md text-center`}>
           <button onClick={() => setShowHeatmap(!showHeatmap)} className={`text-xs uppercase tracking-wider flex items-center gap-2 mx-auto ${colors.textMuted}`}>
