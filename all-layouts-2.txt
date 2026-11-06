@@ -1,0 +1,889 @@
+﻿
+===== FILE: E:\TypeExpress\client\src\components\HindiTypingTest.jsx =====
+
+import { useEffect, useState, useCallback, useRef } from "react";
+import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
+import { toGraphemeSpans } from "../engine/graphemes";
+import { toKrutiSpans } from "../engine/krutiSpans";
+import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
+import { getNextKeyInfo } from "../engine/nextKey";
+import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
+import { prepareCustomParagraph } from "../engine/customText";
+import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
+import VirtualKeyboard from "./VirtualKeyboard";
+import ExamMode from "./ExamMode";
+import { downloadResultPdf } from "../utils/downloadPdf";
+import {
+  playKeySound,
+  playWrongSound,
+  playVictorySound,
+  playComboSound,
+  playMilestoneSound,
+  playComboBreakSound,
+} from "../utils/sounds";
+
+const IGNORED_KEYS = new Set([
+  "Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape",
+  "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+]);
+
+const TIME_OPTIONS_MIN = [1, 2, 3, 5, 10, 15];
+
+const TIME_EXAM_LABELS = {
+  10: "SSC / Railway / Court",
+  15: "CPCT",
+};
+
+const MODE_LABELS = {
+  mangal: "Mangal (InScript)",
+  gail: "Mangal (Remington GAIL)",
+  krutidev: "Krutidev 010",
+};
+
+const DEFAULT_MINUTES = 1;
+const MIN_WORDS = 70;
+const MILESTONE_EVERY = 10; // har itne sahi words par celebration sound
+const COMBO_BREAK_MIN = 5; // itni streak ke baad tootne par "whoomp" sound
+
+// Shared fade/slide-in animation for mode switches (Time / Custom / Exam)
+const MODE_TRANSITION_STYLE = `
+  @keyframes modeFadeSlideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .mode-fade-in {
+    animation: modeFadeSlideIn 0.32s ease-out both;
+  }
+  @keyframes comboPop {
+    0% { transform: scale(0.7); opacity: 0.4; }
+    60% { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .combo-pop {
+    animation: comboPop 0.25s ease-out both;
+  }
+`;
+
+function randomParagraph(source) {
+  const usedIndexes = new Set();
+  let combined = "";
+  let wordCount = 0;
+
+  while (wordCount < MIN_WORDS && usedIndexes.size < source.length) {
+    const idx = Math.floor(Math.random() * source.length);
+    if (usedIndexes.has(idx)) continue;
+    usedIndexes.add(idx);
+
+    const piece = source[idx];
+    combined = combined ? combined + " " + piece : piece;
+    wordCount += piece.split(/\s+/).filter(Boolean).length;
+  }
+
+  return combined;
+}
+
+function encouragement(cpm) {
+  if (cpm >= 150) return "🏆 शानदार! सरकारी परीक्षा के लिए तैयार!";
+  if (cpm >= 100) return "🔥 बहुत अच्छा! अभ्यास जारी रखें!";
+  if (cpm >= 50) return "💪 अच्छी प्रगति!";
+  return "🌱 रोज अभ्यास करते रहें!";
+}
+
+export default function HindiTypingTest({ theme, themeStyles: t }) {
+  const [mode, setMode] = useState("mangal"); // "mangal" | "gail" | "krutidev"
+  const [showExam, setShowExam] = useState(false);
+  const [testMode, setTestMode] = useState("time"); // "time" | "custom"
+  const [selectedTime, setSelectedTime] = useState(DEFAULT_MINUTES * 60);
+  const [customText, setCustomText] = useState("");
+  const [customReady, setCustomReady] = useState(false);
+  const [customNotice, setCustomNotice] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [comboDisplay, setComboDisplay] = useState(0);
+
+  const [state, setState] = useState(() =>
+    createInitialState(randomParagraph(HINDI_PARAGRAPHS), DEFAULT_MINUTES * 60 * 1000)
+  );
+  const [now, setNow] = useState(() => Date.now());
+  const activeWordRef = useRef(null);
+  const passageContainerRef = useRef(null);
+  const lastLineTopRef = useRef(0);
+
+  const hiddenInputRef = useRef(null);
+
+  const comboRef = useRef(0);
+
+  const typedTrackRef = useRef(state.typed);
+  const currentWordRef = useRef(state.words[state.wordIndex] ?? "");
+  useEffect(() => {
+    typedTrackRef.current = state.typed;
+    currentWordRef.current = state.words[state.wordIndex] ?? "";
+  }, [state.typed, state.wordIndex, state.words]);
+
+  const prevFinishedRef = useRef(state.finished);
+  useEffect(() => {
+    if (state.finished && !prevFinishedRef.current) {
+      playVictorySound();
+    }
+    prevFinishedRef.current = state.finished;
+  }, [state.finished]);
+
+  useEffect(() => {
+    const container = passageContainerRef.current;
+    const activeEl = activeWordRef.current;
+    if (!container || !activeEl) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+    const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+
+    if (relativeTop !== lastLineTopRef.current) {
+      lastLineTopRef.current = relativeTop;
+      container.scrollTo({ top: relativeTop, behavior: "smooth" });
+    }
+  }, [state.wordIndex]);
+
+  const showTypingArea = testMode !== "custom" || customReady;
+  useEffect(() => {
+    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
+      hiddenInputRef.current?.focus();
+    }
+  }, [mode, showTypingArea]);
+
+  function refocusHiddenInput() {
+    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
+      hiddenInputRef.current?.focus();
+    }
+  }
+
+  const reset = useCallback(
+    (durationSeconds = selectedTime, activeMode = mode) => {
+      comboRef.current = 0;
+      setComboDisplay(0);
+      if (testMode === "custom" && customReady) {
+        const { paragraph } = prepareCustomParagraph(customText, activeMode === "gail" ? "krutidev" : activeMode);
+        setState(createInitialState(paragraph, durationSeconds * 1000));
+      } else {
+        const source =
+          activeMode === "krutidev" || activeMode === "gail" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+        setState(createInitialState(randomParagraph(source), durationSeconds * 1000));
+      }
+      setNow(Date.now());
+    },
+    [selectedTime, mode, testMode, customReady, customText]
+  );
+
+  const handleSelectTime = (minutes) => {
+    const seconds = minutes * 60;
+    setSelectedTime(seconds);
+    reset(seconds);
+  };
+
+  const handleSelectMode = (newMode) => {
+    setMode(newMode);
+    reset(selectedTime, newMode);
+  };
+
+  const handleModeToggle = (m) => {
+    setTestMode(m);
+    setCustomReady(false);
+    setCustomText("");
+    setCustomNotice(null);
+    reset(selectedTime, mode);
+  };
+
+  const handleStartCustom = () => {
+    const { paragraph, skippedCount } = prepareCustomParagraph(customText, mode === "gail" ? "krutidev" : mode);
+
+    if (!paragraph) return;
+
+    setCustomNotice(
+      skippedCount > 0
+        ? `${skippedCount} शब्द अभी छोड़ दिए गए हैं — जल्द ही सपोर्ट होंगे 🙂`
+        : null
+    );
+    comboRef.current = 0;
+    setComboDisplay(0);
+    setState(createInitialState(paragraph, selectedTime * 1000));
+    setCustomReady(true);
+    setNow(Date.now());
+  };
+
+  const handleDownloadPdf = (stats) => {
+    setDownloadingPdf(true);
+    try {
+      downloadResultPdf({
+        title: "TypeHanuman — Practice Report",
+        meta: `${MODE_LABELS[mode]} · ${Math.round(state.durationMs / 60000)} min`,
+        stats: {
+          wpm: stats.wpm,
+          accuracy: stats.accuracy,
+          grossWpm: stats.grossWpm,
+          netWpm: stats.netWpmSSC,
+          correctWords: stats.correctWords,
+          incorrectWords: stats.incorrectWords,
+        },
+        words: state.words.slice(0, state.wordIndex),
+        typedHistory: state.typedHistory.slice(0, state.wordIndex),
+        wordResults: state.wordResults.slice(0, state.wordIndex),
+        mode,
+        filename: `TypeHanuman-Report-${Date.now()}.pdf`,
+      });
+    } catch (err) {
+      console.error("PDF download failed:", err);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  useEffect(() => {
+    function playSoundFor(charToAppend) {
+      const expectedChar = currentWordRef.current[typedTrackRef.current.length];
+      if (charToAppend === expectedChar) {
+        playKeySound();
+      } else {
+        playWrongSound();
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (state.finished) return;
+      if (testMode === "custom" && !customReady) return;
+
+      if (mode === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
+        return;
+      }
+
+      if (IGNORED_KEYS.has(e.key)) return;
+
+      e.preventDefault();
+
+      if (e.code === "Space") {
+        const isWordCorrect = typedTrackRef.current === currentWordRef.current;
+        if (isWordCorrect) {
+          comboRef.current += 1;
+          const streak = comboRef.current;
+          if (streak % MILESTONE_EVERY === 0) {
+            playMilestoneSound();
+          } else {
+            playComboSound(streak);
+          }
+          setComboDisplay(streak);
+        } else {
+          if (comboRef.current >= COMBO_BREAK_MIN) {
+            playComboBreakSound();
+          } else {
+            playWrongSound();
+          }
+          comboRef.current = 0;
+          setComboDisplay(0);
+        }
+        setState((prev) => commitWord(prev));
+        setNow(Date.now());
+        return;
+      }
+      if (e.code === "Backspace") {
+        setState((prev) => backspace(prev));
+        return;
+      }
+
+      const resolvedKey = resolvePhysicalKey(e);
+      if (!resolvedKey) return;
+
+      let charToAppend = null;
+
+      if (mode === "krutidev" || mode === "gail") {
+        charToAppend = resolvedKey;
+      } else if (e.altKey) {
+        const base = resolveAltGrKey(e);
+        charToAppend = base ? NUKTA_KEYMAP[base] : null;
+      } else {
+        charToAppend = MANGAL_KEYMAP[resolvedKey];
+      }
+
+      if (!charToAppend) return;
+
+      playSoundFor(charToAppend);
+      setState((prev) => appendChar(prev, charToAppend));
+    }
+
+    function handleHiddenInput(e) {
+      if (mode !== "krutidev" && mode !== "gail") return;
+      const typedChar = e.target.value;
+      e.target.value = "";
+      if (!typedChar) return;
+      if (state.finished) return;
+      if (testMode === "custom" && !customReady) return;
+
+      playSoundFor(typedChar);
+      setState((prev) => appendChar(prev, typedChar));
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    const hiddenInput = hiddenInputRef.current;
+    hiddenInput?.addEventListener("input", handleHiddenInput);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      hiddenInput?.removeEventListener("input", handleHiddenInput);
+    };
+  }, [state.finished, mode, testMode, customReady]);
+
+  useEffect(() => {
+    if (state.finished) return;
+    const interval = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      setState((prev) => checkTimeout(prev, t));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [state.finished]);
+
+  const elapsedMs = state.startTime ? now - state.startTime : 0;
+  const fontFamily =
+    mode === "krutidev" || mode === "gail"
+      ? "'Kruti Dev 010', sans-serif"
+      : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
+
+  if (showExam) {
+    return (
+      <div className="mode-fade-in">
+        <style>{MODE_TRANSITION_STYLE}</style>
+        <ExamMode onExit={() => setShowExam(false)} theme={theme} themeStyles={t} />
+      </div>
+    );
+  }
+
+  // ── RESULTS SCREEN ──
+  if (state.finished) {
+    const stats = computeStats(state, elapsedMs);
+    return (
+      <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
+        <div className="text-center">
+          <p className={`text-[clamp(3rem,10vw,6rem)] font-bold tabular-nums ${t.textNormal}`}>{stats.cpm}</p>
+          <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Characters Per Minute</p>
+        </div>
+
+        <div className="flex gap-6 flex-wrap justify-center">
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.textNormal}`}>{stats.wpm}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>WPM</p>
+          </div>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.textNormal}`}>{stats.accuracy}%</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Accuracy</p>
+          </div>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.correct}`}>{stats.correctWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Correct Words</p>
+          </div>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-4xl font-bold ${t.incorrect}`}>{stats.incorrectWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Wrong Words</p>
+          </div>
+        </div>
+
+        <div className={`w-full max-w-2xl p-4 ${t.glassCard}`}>
+          <p className={`text-xs text-center ${t.textMuted} mb-3 uppercase tracking-wider`}>
+            असली परीक्षा जैसा स्कोर
+          </p>
+          <div className="flex gap-4 flex-wrap justify-center">
+            <div className="text-center min-w-[100px]">
+              <p className={`text-2xl font-bold ${t.textNormal}`}>{stats.grossWpm}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Gross WPM</p>
+            </div>
+            <div className="text-center min-w-[100px]">
+              <p className="text-2xl font-bold text-blue-500">{stats.netWpmSSC}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Net WPM (SSC/CPCT)</p>
+            </div>
+            <div className="text-center min-w-[100px]">
+              <p className="text-2xl font-bold text-purple-500">{stats.netWpmRSMSSB}</p>
+              <p className={`text-[10px] ${t.textMuted} mt-0.5`}>Net WPM (RSMSSB)</p>
+            </div>
+          </div>
+        </div>
+
+        <div className={`w-full p-4 text-center ${t.glassCard}`}>
+          <p className={t.textNormal} style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}>
+            {encouragement(stats.cpm)}
+          </p>
+          <p className={`text-xs mt-1 ${t.textMuted}`}>CPCT/SSC target: 150+ CPM with 90%+ accuracy</p>
+        </div>
+
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button
+            onClick={() => reset()}
+            className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${t.primaryButton}`}
+            style={{ fontFamily: "'Noto Sans Devanagari', sans-serif" }}
+          >
+            फिर से कोशिश करें
+          </button>
+          <button
+            onClick={() => handleDownloadPdf(stats)}
+            disabled={downloadingPdf}
+            className={`px-8 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-50 ${t.glassButton} ${t.textNormal}`}
+          >
+            {downloadingPdf ? "तैयार हो रहा है..." : "📄 रिजल्ट डाउनलोड करें"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── TYPING SCREEN ──
+  const activeWord = state.words[state.wordIndex] ?? "";
+  const nextKeyInfo =
+    state.typed.length >= activeWord.length
+      ? { label: " ", shift: false }
+      : mode === "krutidev" || mode === "gail"
+      ? getNextKrutiKeyInfo(activeWord[state.typed.length])
+      : getNextKeyInfo(activeWord.slice(state.typed.length));
+
+  const remainingSeconds = state.startTime
+    ? Math.max(0, Math.ceil((state.durationMs - elapsedMs) / 1000))
+    : Math.round(state.durationMs / 1000);
+  const formattedTime = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, "0")}`;
+  const timeColor =
+    remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
+
+  return (
+    <div
+      className="flex flex-col max-w-4xl mx-auto w-full py-8"
+      onClick={refocusHiddenInput}
+    >
+      <style>{MODE_TRANSITION_STYLE}</style>
+
+      <input
+        ref={hiddenInputRef}
+        tabIndex={-1}
+        className="fixed opacity-0 pointer-events-none"
+        style={{ top: 0, left: 0, width: 1, height: 1 }}
+      />
+
+      {/* ── PINNED TOP SECTION ──
+          Layout selector + Time/Custom/Exam tabs. Stays in place across mode switches. */}
+      <div className="flex flex-col gap-6">
+        <div className="flex justify-center gap-2 flex-wrap">
+          <button
+            onClick={() => handleSelectMode("mangal")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "mangal" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Mangal (InScript)
+          </button>
+          <button
+            onClick={() => handleSelectMode("gail")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "gail" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Mangal (Remington GAIL)
+          </button>
+          <button
+            onClick={() => handleSelectMode("krutidev")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              mode === "krutidev" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Krutidev 010
+          </button>
+        </div>
+
+        {(mode === "krutidev" || mode === "gail") && (
+          <p className={`text-center text-xs ${t.textMuted}`}>
+            विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
+          </p>
+        )}
+
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => handleModeToggle("time")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              testMode === "time" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Time
+          </button>
+          <button
+            onClick={() => handleModeToggle("custom")}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${
+              testMode === "custom" ? `${t.glassButtonActive} ${t.textNormal}` : `${t.glassButton} ${t.textMuted}`
+            }`}
+          >
+            Custom
+          </button>
+          <button
+            onClick={() => setShowExam(true)}
+            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${t.glassButton} ${t.textMuted} hover:opacity-80`}
+          >
+            Exam
+          </button>
+        </div>
+      </div>
+
+      {/* ── VARIABLE-HEIGHT SECTION BELOW ──
+          key={testMode + customReady} forces React to remount this block on every
+          mode switch, replaying the fade/slide-in animation each time. */}
+      <div
+        key={`${testMode}-${customReady}-${mode}`}
+        className="mode-fade-in flex flex-col gap-6 mt-6 lg:flex-1 lg:justify-center"
+      >
+        {testMode === "custom" && !customReady && (
+          <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+            <p className={`text-sm text-center ${t.textMuted}`}>
+              Mangal ya Krutidev — jo bhi text paste karoge, hum khud pehchan lenge
+            </p>
+            <textarea
+              className={`w-full h-32 rounded-xl p-4 text-sm resize-none outline-none ${t.glassCard} ${t.textNormal}`}
+              placeholder="Apna paragraph yahan paste karo..."
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+            />
+            <button
+              onClick={handleStartCustom}
+              disabled={customText.trim().length === 0}
+              className={`mx-auto px-8 py-3 rounded-xl text-sm font-medium transition-all hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 ${t.primaryButton}`}
+            >
+              Start Typing →
+            </button>
+          </div>
+        )}
+
+        {showTypingArea && (
+          <>
+            {testMode === "time" && (
+              <div className="flex justify-center gap-2 flex-wrap">
+                {TIME_OPTIONS_MIN.map((min) => (
+                  <button
+                    key={min}
+                    onClick={() => handleSelectTime(min)}
+                    className={`px-3 py-1 rounded-lg text-xs transition-all flex flex-col items-center ${
+                      selectedTime === min * 60
+                        ? `${t.glassButtonActive} ${t.textNormal}`
+                        : `${t.glassButton} ${t.textMuted}`
+                    }`}
+                  >
+                    <span>{min} min</span>
+                    {TIME_EXAM_LABELS[min] && (
+                      <span className="text-[9px] opacity-70">{TIME_EXAM_LABELS[min]}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="text-center">
+              <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
+              <div className="h-7 mt-1 flex items-center justify-center">
+                {comboDisplay >= 3 && (
+                  <span
+                    key={comboDisplay}
+                    className={`combo-pop text-sm font-bold ${t.textNormal}`}
+                  >
+                    🔥 Combo x{comboDisplay}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className={`p-8 shadow-xl ${t.glassCard}`}>
+              <div
+                ref={passageContainerRef}
+                className="text-2xl flex flex-wrap gap-x-3 overflow-y-auto hide-scrollbar"
+                style={{ fontFamily, lineHeight: "3.5rem", maxHeight: "7.5rem" }}
+              >
+                {state.words.map((word, wIdx) => {
+                  if (wIdx < state.wordIndex) {
+                    const result = state.wordResults[wIdx];
+                    return (
+                      <span
+                        key={wIdx}
+                        className={result === "correct" ? t.correct : `${t.incorrect} underline decoration-2`}
+                      >
+                        {word}
+                      </span>
+                    );
+                  }
+
+                  if (wIdx === state.wordIndex) {
+                    const spans = mode === "krutidev" || mode === "gail" ? toKrutiSpans(word) : toGraphemeSpans(word);
+                    const typed = state.typed;
+
+                    return (
+                      <span key={wIdx} ref={activeWordRef} className="inline-flex">
+                        {spans.map((seg, sIdx) => {
+                          let className = t.untyped;
+                          let style;
+
+                          if (typed.length >= seg.end) {
+                            const typedSlice = typed.slice(seg.start, seg.end);
+                            className = typedSlice === seg.text ? t.correct : t.incorrect;
+                          } else if (typed.length >= seg.start) {
+                            className = `${t.untyped} border-l-2 animate-pulse`;
+                            style = { borderColor: t.cursor };
+                          }
+
+                          return (
+                            <span key={sIdx} className={className} style={style}>
+                              {seg.text}
+                            </span>
+                          );
+                        })}
+
+                        {typed.length > word.length && (
+                          <span className={`${t.incorrect} bg-red-500/10 rounded px-0.5`}>
+                            {typed.slice(word.length)}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <span key={wIdx} className={t.untyped}>
+                      {word}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} theme={theme} themeStyles={t} />
+
+            {customNotice && (
+              <p className={`text-center text-xs ${t.textMuted}`}>{customNotice}</p>
+            )}
+
+            {((nextKeyInfo?.altGr && mode === "mangal") ||
+              (nextKeyInfo?.altCode !== undefined && mode === "krutidev")) && (
+              <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-md">
+                <div className="text-center p-3 rounded-xl border border-yellow-500/40 bg-yellow-500/95 shadow-xl backdrop-blur">
+                  <p className="text-sm text-black font-medium">
+                    {mode === "mangal" ? (
+                      <>
+                        ⚠️ यह अक्षर <strong>Shift से नहीं</strong> बनता — कीबोर्ड की <strong>दाईं तरफ वाली Alt key</strong> दबाकर रखें, फिर <strong>{nextKeyInfo.label}</strong> दबाएं
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ यह विशेष अक्षर है — <strong>Alt दबाकर रखें</strong>, फिर नंबर-पैड पर <strong>0{nextKeyInfo.altCode}</strong> टाइप करें, फिर Alt छोड़ दें
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <button onClick={() => reset()} className={`mx-auto text-sm underline ${t.textMuted}`}>
+              Reset
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+===== FILE: E:\TypeExpress\client\src\lessons\contentResolver.ts =====
+
+// ======================================================
+// Content Resolver — category ke paragraphs ko sahi LAYOUT
+// ke hisaab se resolve karta hai.
+// ======================================================
+// Content Bank mein sab kuch Unicode Hindi mein hai. Ye file
+// wahi content leke, exam ke selected layout ke hisaab se
+// display-ready text banati hai:
+//   - "inscript" ya "gail" mode  -> Unicode text jaisa hai waisa
+//   - "krutidev" mode            -> uni2kru() se convert karke
+//
+// Naya paragraph Content Bank mein add hote hi, ye function
+// use automatically teeno layouts ke liye resolve kar dega —
+// yahan kuch badalne ki zaroorat kabhi nahi padegi.
+// ======================================================
+
+import { CONTENT_BANK, ContentCategory, ContentEntry } from "./contentBank";
+import { uni2kru } from "../engine/uni2kru";
+
+export type ExamLayout = "inscript" | "gail" | "krutidev";
+
+export interface ResolvedChapter {
+  id: string;
+  title: string;
+  text: string; // display-ready — already sahi layout ke liye convert ho chuka
+}
+
+function toDisplayText(unicodeText: string, layout: ExamLayout): string {
+  if (layout === "krutidev") {
+    return uni2kru(unicodeText);
+  }
+  // inscript aur gail dono Unicode hi rakhte hain (GAIL mein bhi
+  // target text Unicode hi hota hai — sirf raw keystrokes Kruti
+  // Dev jaisi hoti hain, jo humne HindiTypingTest.jsx mein
+  // pehle hi handle kar diya hai).
+  return unicodeText;
+}
+
+// Har content entry ko ek chhota, readable title bhi chahiye
+// chapter-list screen ke liye — pehle 4-5 shabdon se bana lete hain.
+function titleFor(entry: ContentEntry): string {
+  const firstWords = entry.text.split(/\s+/).slice(0, 5).join(" ");
+  return firstWords + "...";
+}
+
+export function resolveChapters(
+  categories: ContentCategory[],
+  layout: ExamLayout
+): ResolvedChapter[] {
+  const matched = CONTENT_BANK.filter((entry) =>
+    entry.categories.some((c) => categories.includes(c))
+  );
+
+  return matched.map((entry) => ({
+    id: entry.id,
+    title: titleFor(entry),
+    text: toDisplayText(entry.text, layout),
+  }));
+}
+
+===== FILE: E:\TypeExpress\client\src\lessons\examConfig.js =====
+
+// ======================================================
+// Exam Configs
+// ======================================================
+// backspaceMode ke 4 possible values:
+//   "full"              -> jitna chaho backspace karo (CPCT, BSSC)
+//   "none"              -> bilkul allowed nahi (SSC, RRB NTPC)
+//   "currentWordOnly"   -> sirf abhi wale word tak (RSMSSB)
+//   "currentPlusOneWord"-> current + 1 pichla word tak (UPSSSC)
+//
+// layouts: array hai kyunki kai exams 1+ layout allow karte hain.
+//   1 layout  -> exam select karte hi seedha chapter list khulegi
+//   2+ layout -> pehle "layout choose karo" screen aayega
+//
+// contentCategories: contentBank.ts se kaunse paragraphs is exam
+// ke liye dikhengi, category ke through.
+// ======================================================
+
+export const EXAM_CONFIGS = {
+  cpct: {
+    label: "CPCT",
+    fullName: "CPCT (MP Govt.)",
+    durationSeconds: 15 * 60,
+    backspaceMode: "full",
+    layouts: ["gail", "inscript"],
+    contentCategories: ["general", "revenue"],
+    scoreMethod: "ssc",
+  },
+  ssc: {
+    label: "SSC",
+    fullName: "SSC CGL / CHSL / Stenographer",
+    durationSeconds: 10 * 60,
+    backspaceMode: "none",
+    layouts: ["krutidev", "inscript"],
+    contentCategories: ["general"],
+    scoreMethod: "ssc",
+  },
+  rrbntpc: {
+    label: "RRB NTPC",
+    fullName: "Railway RRB NTPC (Junior Clerk / Typist)",
+    durationSeconds: 10 * 60,
+    backspaceMode: "none",
+    layouts: ["krutidev", "gail"],
+    contentCategories: ["railway", "general"],
+    scoreMethod: "ssc",
+  },
+  upsssc: {
+    label: "UPSSSC",
+    fullName: "UPSSSC Junior Assistant",
+    durationSeconds: 5 * 60,
+    backspaceMode: "currentPlusOneWord",
+    layouts: ["krutidev", "inscript"],
+    contentCategories: ["general", "revenue"],
+    scoreMethod: "ssc",
+  },
+  rsmssb: {
+    label: "RSMSSB",
+    fullName: "RSMSSB Informatics Assistant (Rajasthan)",
+    durationSeconds: 15 * 60,
+    backspaceMode: "currentWordOnly",
+    layouts: ["gail"],
+    contentCategories: ["revenue", "general"],
+    scoreMethod: "rsmssb",
+  },
+  bssc: {
+    label: "BSSC",
+    fullName: "BSSC Inter Level (Bihar)",
+    durationSeconds: 10 * 60,
+    backspaceMode: "full",
+    layouts: ["inscript", "gail"],
+    contentCategories: ["general", "revenue"],
+    scoreMethod: "ssc",
+  },
+  highcourt: {
+    label: "High Court",
+    fullName: "High Court Clerk / Copyist",
+    durationSeconds: 10 * 60,
+    backspaceMode: "full",
+    layouts: ["gail", "krutidev"],
+    contentCategories: ["court", "general"],
+    scoreMethod: "ssc",
+  },
+};
+
+===== FILE: E:\TypeExpress\client\src\lessons\HindiParagraphs.js =====
+
+// ── 1. MANGAL (UNICODE) PARAGRAPHS ──
+// This is your original text. It is used when Mangal font is selected.
+export const HINDI_PARAGRAPHS = [
+  "आम घर पानी खाना काम देश लोग बात हाथ दिन रात समय जगह साल बच्चा महिला पुरुष सरकार राज्य शहर",
+  "गांव स्कूल किताब पढ़ना लिखना खेलना दौड़ना पीना सोना उठना बैठना चलना आना जाना करना होना देना लेना बोलना",
+  "सुनना देखना सोचना समझना जानना मानना चाहना मिलना रहना बनना नया पुराना बड़ा छोटा अच्छा बुरा सही गलत सुंदर कठिन",
+  "भारत दिल्ली मुंबई जयपुर लखनऊ पटना भोपाल रायपुर कोलकाता चेन्नई नदी पहाड़ जंगल समुद्र आकाश धरती हवा आग मिट्टी पत्थर",
+  "सूरज चांद तारा बादल बारिश धूप छाया रोशनी अंधेरा शांति परिवार मां पिता भाई बहन दोस्त गुरु छात्र नेता किसान",
+  "डॉक्टर वकील इंजीनियर शिक्षक सैनिक पुलिस नर्स व्यापारी कारीगर मजदूर स्वास्थ्य शिक्षा विकास प्रगति स्वतंत्रता न्याय सत्य प्रेम करुणा मेहनत",
+  "खुशी दुख क्रोध डर आशा विश्वास साहस धैर्य ईमानदारी सफलता असफलता संघर्ष जीत हार अवसर चुनौती लक्ष्य सपना उड़ान तेज",
+  "भारत एक महान देश है यहां अनेक भाषाएं बोली जाती हैं हिंदी राष्ट्रभाषा है देश के लोग मिलजुल कर रहते हैं",
+  "शिक्षा जीवन का आधार है पढ़ाई से इंसान आगे बढ़ता है मेहनत करने वाले को सफलता जरूर मिलती है",
+  "स्वास्थ्य सबसे बड़ा धन है रोज व्यायाम करना चाहिए सही खाना खाओ और खुश रहो जीवन बहुत सुंदर है",
+  "किसान खेत में काम करता है वह अनाज उगाता है देश का पेट भरता है किसान हमारे अन्नदाता हैं",
+  "नदी का पानी साफ रखो पेड़ लगाओ पर्यावरण बचाओ धरती हमारी माँ है इसकी रक्षा करना हमारा कर्तव्य है",
+  "सरकारी परीक्षा की तैयारी करो रोज टाइपिंग अभ्यास करो सफलता जरूर मिलेगी लक्ष्य निर्धारित करो और मेहनत करो",
+  "हिंदी टाइपिंग सीखना आसान है रोज अभ्यास करने से गति बढ़ती है सटीकता पर ध्यान दो गलतियां कम करो",
+  "देश की सेवा करना सबसे बड़ा काम है ईमानदारी से काम करो सच बोलो और सही राह पर चलो",
+  "एक छोटे से गांव में एक किसान रहता था। उसका नाम रामलाल था। वह रोज सुबह जल्दी उठता और अपने खेत में काम करने जाता। उसके पास एक बड़ा बैल था जिसका नाम मोती था। रामलाल और मोती मिलकर खेत जोतते, बीज बोते और फसल उगाते। गांव के लोग रामलाल की मेहनत की बहुत तारीफ करते थे। एक दिन तेज बारिश होने लगी और नदी का पानी बढ़ने लगा। पूरा गांव डर गया कि कहीं बाढ़ न आ जाए। रामलाल ने सबको समझाया और मिलकर पानी रोकने के लिए मिट्टी के बांध बनाए। उसकी सूझबूझ से पूरा गांव बच गया। उस दिन से गांव वाले उसे अपना असली नेता मानने लगे।",
+  "प्राचीन समय में एक राजा था जिसका नाम विक्रमसेन था। वह बहुत ही ईमानदार और न्यायप्रिय शासक था। उसके राज्य में चारों तरफ शांति और खुशहाली थी। एक बार उसके राज्य में भयंकर सूखा पड़ा। खेतों में पानी नहीं था, नदियां सूख गई थीं और लोग परेशान हो गए। राजा ने अपने मंत्रियों को बुलाया और पूछा कि इस समस्या का हल कैसे निकाला जाए। एक बुद्धिमान मंत्री ने सुझाव दिया कि पहाड़ों के पास एक बड़ा तालाब बनाया जाए ताकि बारिश का पानी जमा हो सके। राजा ने तुरंत यह काम शुरू करवाया। हजारों मजदूरों ने दिन रात मेहनत करके तालाब बनाया। जब बारिश आई तो सारा पानी उस तालाब में जमा हो गया और पूरे राज्य को पानी मिलने लगा। प्रजा राजा की सूझबूझ से बहुत खुश हुई और उसे धन्यवाद देने लगी।",
+  "आधुनिक समय में शिक्षा का महत्व बहुत बढ़ गया है। सरकारी परीक्षाओं की तैयारी करने वाले छात्रों के लिए टाइपिंग एक जरूरी कौशल बन गया है। चाहे वह एसएससी हो, रेलवे हो या हाईकोर्ट की परीक्षा, हर जगह हिंदी टाइपिंग की गति और सटीकता दोनों जरूरी होती हैं। जो छात्र रोज अभ्यास करते हैं, वे धीरे धीरे तेज गति से सही टाइपिंग करना सीख जाते हैं। शुरुआत में गलतियां होना स्वाभाविक है, लेकिन निरंतर अभ्यास से ये गलतियां कम होती जाती हैं। पढ़ाई के साथ ही साथ टाइपिंग का अभ्यास करने से समय की बचत होती है और परीक्षा में सफलता मिलने की संभावना बढ़ जाती है।"
+];
+
+// ── 2. KRUTI DEV (ASCII) PARAGRAPHS ──
+// This is the exact same text, but translated into the English keys 
+// required to type them using the Kruti Dev font.
+// Naye 3 bade stories dost ne khud Krutidev font mein type karke diye
+// hain — 55/55 characters verified typeable, aur common words
+// (गांव, किसान, पानी) already-verified purane data se exact match karte hain।
+export const KRUTIDEV_PARAGRAPHS = [
+  "vke ?kj ikuh [kkuk dke ns'k yksx ckr gkFk fnu jkr le; txg lky cPpk efgyk iq#\"k ljdkj jkT; 'kgj",
+  "xkao Ldwy fdrkc i<+uk fy[kuk [ksyuk nkSM+uk ihuk lksuk mBuk cSBuk pyuk vkuk tkuk djuk gksuk nsuk ysuk cksyuk",
+  "lquuk ns[kuk lkspuk le>uk tkuuk ekuuk pkguk feyuk jguk cuuk u;k iqjkuk cM+k NksVk vPNk cqjk lgh xyr lqanj dfBu",
+  "Hkkjr fnYyh eqacbZ t;iqj y[kuÅ iVuk Hkksiky jk;iqj dksydkrk psUubZ unh igkM+ taxy leqnz vkdk'k /kjrh gok vkx feV~Vh iRFkj",
+  "lwjt pkan rkjk ckny ckfj'k /kwi Nk;k jks'kuh va/ksjk 'kkafr ifjokj eka firk HkkbZ cgu nksLr xq# Nk= usrk fdlku",
+  "MkWDVj odhy bathfu;j f'k{kd lSfud iqfyl ulZ O;kikjh dkjhxj etnwj LokLF; f'k{kk fodkl izxfr Lora=rk U;k; lR; izse d#.kk esgur",
+  "[kq'kh nq[k dzks/k Mj vk'kk fo'okl lkgl /kS;Z bZekunkjh lQyrk vlQyrk la?k\"kZ thr gkj volj pqukSrh y{; liuk mM+ku rst",
+  "Hkkjr ,d egku ns'k gS ;gka vusd Hkk\"kk,a cksyh tkrh gSa fganh jk\"VªHkk\"kk gS ns'k ds yksx feytqy dj jgrs gSa",
+  "f'k{kk thou dk vk/kkj gS i<+kbZ ls balku vkxs c<+rk gS esgur djus okys dks lQyrk t#j feyrh gS",
+  "LokLF; lcls cM+k /ku gS jkst O;k;ke djuk pkfg, lgh [kkuk [kkvks vkSj [kq'k jgks thou cgqr lqanj gS",
+  "fdlku [ksr esa dke djrk gS og vukt mxkrk gS ns'k dk isV Hkjrk gS fdlku gekjs vUunkrk gSa",
+  "unh dk ikuh lkQ j[kks isM+ yxkvks i;kZoj.k cpkvks /kjrh gekjh eka gS bldh j{kk djuk gekjk drZO; gS",
+  "ljdkjh ijh{kk dh rS;kjh djks jkst VkbZfiax vH;kl djks lQyrk t#j feysxh y{; fu/kkZfjr djks vkSj esgur djks",
+  "fganh VkbZfiax lh[kuk vklku gS jkst vH;kl djus ls xfr c<+rh gS lVhdrk ij /;ku nks xyfr;ka de djks",
+  "ns'k dh lsok djuk lcls cM+k dke gS bZekunkjh ls dke djks lp cksyks vkSj lgh jkg ij pyks",
+  ",d NksVs ls xkao esa ,d fdlku jgrk FkkA mldk uke jkeyky FkkA og jkst lqcg tYnh mBrk vkSj vius [ksr esa dke djus tkrkA mlds ikl ,d cM+k cSy Fkk ftldk uke eksrh FkkA jkeyky vkSj eksrh feydj [ksr tksrrs] cht cksrs vkSj Qly mxkrsA xkao ds yksx jkeyky dh esgur dh cgqr rkjhQ djrs FksA ,d fnu rst ckfj'k gksus yxh vkSj unh dk ikuh c<+us yxkA iwjk xkao Mj x;k fd dgha ck<+ u vk tk,A jkeyky us lcdks le>k;k vkSj feydj ikuh jksdus ds fy, feV~Vh ds ca/k cuk,A mldh lw>cw> ls iwjk xkao cp x;kA ml fnu ls xkao okys mls viuk vlyh usrk ekuus yxsA",
+  "izkphu le; esa ,d jktk Fkk ftldk uke fodzelsu FkkA og cgqr gh bZekunkj vkSj U;k;fiz; 'kkld FkkA mlds jkT; esa pkjksa rjQ 'kkafr vkSj [kq'kgkyh FkhA ,d ckj mlds jkT; esa Hk;adj lw[kk iM+kA [ksrksa esa ikuh ugha Fkk] ufn;ka lw[k xbZ Fkha vkSj yksx ijs'kku gks x,A jktk us vius ea=fj;ksa dks cqyk;k vkSj iwNk fd bl leL;k dk gy dSls fudkyk tk,A ,d cqf)eku ea=h us lq>ko fn;k fd igkM+ksa ds ikl ,d cM+k rkykc cuk;k tk, rkfd ckfj'k dk ikuh tek gks ldsA jktk us rqjar ;g dke 'kq: djok;kA gtkjksa etnwjksa us fnu jkr esgur djds rkykc cuk;kA tc ckfj'k vkbZ rks lkjk ikuh ml rkykc esa tek gks x;k vkSj iwjs jkT; dks ikuh feyus yxkA iztk jktk dh lw>cw> ls cgqr [kq'k gqbZ vkSj mls /kU;okn nsus yxhA",
+  "vk/qfud le; esa f'k{kk dk egRo cgqr c<+ x;k gSA ljdkjh ijh{kkvksa dh rS;kjh djus okys Nk=ksa ds fy, Vkbfiax ,d t:jh dkS'ky cu x;k gSA pkgs og ,l,lllh gks] jsyos gks ;k gkbZdksVZ dh ijh{kk] gj txg fgUnh Vkbfiax dh xfr vkSj lVhdrk nksuksa t:jh gksrh gSA tks Nk= jkst vH;kl djrs gSa] os /khjs /khjs rst xfr ls lgh Vkbfiax djuk lh[k tkrs gSaA 'kq:vkr esa xyrh;ka gksuk LokHkkfod gS] ysfdu fujarj vH;kl ls ;s xyrh;ka de gksrh tkrh gSaA i<+kbZ ds lkFk gh lkFk Vkbfiax dk vH;kl djus ls le; dh cpr gksrh gS vkSj ijh{kk esa lQyrk feyus dh laHkkouk c<+ tkrh gSA"
+];

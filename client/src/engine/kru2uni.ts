@@ -135,6 +135,19 @@ const k2u: [string, string][] = [
   ['A', '\u0964'],
   [']', ','],
   ['z', '\u094d\u0930'],
+  // --- FIX (Nov 2026): entries present in the official IIIT-H table but missing here ---
+  // W = ॅ  (so Dk+W -> डॉ style words: डॉक्टर, कॉलेज, ऑफिस work with the real typing sequence)
+  ['W', '\u0945'],
+  // punctuation keys of the real Krutidev layout (keep AFTER all consonant rules above)
+  ['-', '.'],            // '-' key  -> full stop
+  ['&', '-'],            // Shift+7  -> hyphen
+  ['@', '/'],            // Shift+2  -> slash
+  ['\u00bc', '('],      // ¼ (Alt+0188) -> (
+  ['\u00bd', ')'],      // ½ (Alt+0189) -> )
+  ['^', '\u2018'],      // ^  -> ‘
+  ['*', '\u2019'],      // *  -> ’
+  ['\u00de', '\u201c'],// Þ -> “
+  ['\u00df', '\u201d'],// ß -> ”
 ];
 
 const unicode_vowel_signs = [
@@ -232,6 +245,11 @@ export function kru2uni(input: string): string {
   kruText = kruText.split('\u094d\u0930\u094d').join('\u0930\u094d');
   kruText = kruText.split('\u094d\u094d').join('\u094d');
   kruText = kruText.split('\u094d ').join(' ');
+
+  // ॅ after aa-matra / आ is how Krutidev draws ॉ / ऑ: fold them into the real Unicode forms
+  kruText = kruText.split('\u0906\u0945').join('\u0911');   // आॅ -> ऑ
+  kruText = kruText.split('\u093e\u0945').join('\u0949');   // ाॅ -> ॉ
+  kruText = kruText.split('\u094b\u0945').join('\u0949');   // ोॅ -> ॉ
 
   return kruText.normalize('NFC');
 }

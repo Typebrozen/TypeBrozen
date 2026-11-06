@@ -1,0 +1,670 @@
+﻿
+===== FILE: E:\TypeExpress\client\src\components\ExamMode.jsx =====
+
+import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  createInitialState,
+  appendChar,
+  backspace,
+  reopenPreviousWord,
+  commitWord,
+  checkTimeout,
+  computeStats,
+} from "../engine/engine";
+import { toGraphemeSpans } from "../engine/graphemes";
+import { toKrutiSpans } from "../engine/krutiSpans";
+import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
+import { getNextKeyInfo } from "../engine/nextKey";
+import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
+import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { EXAM_CONFIGS } from "../lessons/examConfig";
+import { resolveChapters } from "../lessons/contentResolver";
+
+const IGNORED_KEYS = new Set([
+  "Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape",
+  "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+  "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+]);
+
+const LAYOUT_LABELS = {
+  inscript: "Mangal (InScript)",
+  gail: "Mangal (Remington GAIL)",
+  krutidev: "Krutidev 010",
+};
+
+// "krutidev" aur "gail" dono raw Kruti-Dev-style physical keys use
+// karte hain (target text already uni2kru se convert ho chuka hota
+// hai contentResolver mein) — isliye typing-logic ke liye ye dono
+// EK jaisa treat hote hain. Sirf "inscript" alag hai.
+function isRawGlyphLayout(layout) {
+  return layout === "krutidev" || layout === "gail";
+}
+
+function maxWordsBackFor(backspaceMode) {
+  if (backspaceMode === "full") return Infinity;
+  if (backspaceMode === "currentPlusOneWord") return 1;
+  return 0; // "currentWordOnly" aur "none" dono ke liye 0
+}
+
+function buildLoopedParagraph(chapterText, durationSeconds) {
+  const targetWords = Math.ceil((durationSeconds / 60) * 100);
+  const chapterWordCount = chapterText.split(/\s+/).filter(Boolean).length;
+  const repeats = Math.max(1, Math.ceil(targetWords / chapterWordCount));
+  return Array(repeats).fill(chapterText).join(" ");
+}
+
+export default function ExamMode({ onExit, theme, themeStyles: t }) {
+  const [examKey, setExamKey] = useState(null);
+  const [layout, setLayout] = useState(null); 
+  const [chapterIndex, setChapterIndex] = useState(null);
+  const [state, setState] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const config = examKey ? EXAM_CONFIGS[examKey] : null;
+  const needsLayoutChoice = config && config.layouts.length > 1;
+  const activeLayout = config ? layout ?? (config.layouts.length === 1 ? config.layouts[0] : null) : null;
+
+  const chapters = config && activeLayout ? resolveChapters(config.contentCategories, activeLayout) : [];
+  const activeChapter = chapterIndex !== null ? chapters[chapterIndex] : null;
+
+  const typedTrackRef = useRef("");
+  useEffect(() => {
+    typedTrackRef.current = state?.typed ?? "";
+  }, [state?.typed]);
+
+  const hiddenInputRef = useRef(null);
+
+  const activeWordRef = useRef(null);
+  const passageRef = useRef(null);
+  const typedBoxRef = useRef(null);
+  const lastLineTopRef = useRef(0);
+
+  useEffect(() => {
+    const container = passageRef.current;
+    const activeEl = activeWordRef.current;
+
+    if (container && activeEl) {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+
+      if (relativeTop !== lastLineTopRef.current) {
+        lastLineTopRef.current = relativeTop;
+        container.scrollTo({ top: relativeTop, behavior: "smooth" });
+      }
+    }
+    if (typedBoxRef.current) {
+      typedBoxRef.current.scrollTop = typedBoxRef.current.scrollHeight;
+    }
+  }, [state?.wordIndex]);
+
+  useEffect(() => {
+    if (activeLayout === "krutidev" && state && !state.finished) {
+      hiddenInputRef.current?.focus();
+    }
+  }, [activeLayout, state]);
+
+  function refocusHiddenInput() {
+    if (activeLayout === "krutidev" && state && !state.finished) {
+      hiddenInputRef.current?.focus();
+    }
+  }
+
+  const selectExam = (key) => {
+    setExamKey(key);
+    setLayout(null);
+    setChapterIndex(null);
+  };
+
+  const selectLayout = (l) => {
+    setLayout(l);
+    setChapterIndex(null);
+  };
+
+  const startChapter = (idx) => {
+    const cfg = EXAM_CONFIGS[examKey];
+    const chapter = chapters[idx];
+    setChapterIndex(idx);
+    setState(createInitialState(buildLoopedParagraph(chapter.text, cfg.durationSeconds), cfg.durationSeconds * 1000));
+    setNow(Date.now());
+  };
+
+  const restartChapter = useCallback(() => {
+    if (!examKey || chapterIndex === null) return;
+    const cfg = EXAM_CONFIGS[examKey];
+    const chapter = chapters[chapterIndex];
+    setState(createInitialState(buildLoopedParagraph(chapter.text, cfg.durationSeconds), cfg.durationSeconds * 1000));
+    setNow(Date.now());
+  }, [examKey, chapterIndex, chapters]);
+
+  const backToChapterList = () => {
+    setChapterIndex(null);
+    setState(null);
+  };
+
+  const backToLayoutChoice = () => {
+    setLayout(null);
+    setChapterIndex(null);
+    setState(null);
+  };
+
+  const exitExam = () => {
+    setExamKey(null);
+    setLayout(null);
+    setChapterIndex(null);
+    setState(null);
+  };
+
+  // Keyboard input
+  useEffect(() => {
+    if (!config || !state || !activeLayout) return;
+
+    function handleKeyDown(e) {
+      if (state.finished) return;
+      if (IGNORED_KEYS.has(e.key)) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        return;
+      }
+
+      if (activeLayout === "krutidev" && e.altKey && e.code && e.code.startsWith("Numpad")) {
+        return;
+      }
+
+      e.preventDefault();
+
+      if (e.code === "Space") {
+        setState((prev) => commitWord(prev));
+        setNow(Date.now());
+        return;
+      }
+
+      if (e.code === "Backspace") {
+        if (config.backspaceMode === "none") return; 
+        if (state.typed.length > 0) {
+          setState((prev) => backspace(prev));
+          return;
+        }
+        setState((prev) => reopenPreviousWord(prev, maxWordsBackFor(config.backspaceMode)));
+        return;
+      }
+
+      let charToAppend = null;
+
+      if (isRawGlyphLayout(activeLayout)) {
+        charToAppend = resolvePhysicalKey(e);
+      } else if (e.altKey) {
+        const base = resolveAltGrKey(e);
+        charToAppend = base ? NUKTA_KEYMAP[base] : null;
+      } else {
+        const resolvedKey = resolvePhysicalKey(e);
+        charToAppend = resolvedKey ? MANGAL_KEYMAP[resolvedKey] : null;
+      }
+
+      if (!charToAppend) return;
+      setState((prev) => appendChar(prev, charToAppend));
+    }
+
+    function handleHiddenInput(e) {
+      if (activeLayout !== "krutidev") return;
+      const typedChar = e.target.value;
+      e.target.value = "";
+      if (!typedChar) return;
+      if (state.finished) return;
+      setState((prev) => appendChar(prev, typedChar));
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    const hiddenInput = hiddenInputRef.current;
+    hiddenInput?.addEventListener("input", handleHiddenInput);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      hiddenInput?.removeEventListener("input", handleHiddenInput);
+    };
+  }, [state, config, activeLayout]);
+
+  // Timer
+  useEffect(() => {
+    if (!state || state.finished) return;
+    const interval = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      setState((prev) => (prev ? checkTimeout(prev, t) : prev));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [state?.finished]);
+
+  const fontFamily = isRawGlyphLayout(activeLayout)
+    ? "'Kruti Dev 010', sans-serif"
+    : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
+
+  // ── SCREEN 1: Exam picker ──
+  if (!config) {
+    return (
+      <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
+          Apna exam chuno — duration, backspace rule aur layout automatically set ho jayenge
+        </p>
+        {Object.entries(EXAM_CONFIGS).map(([key, cfg]) => (
+          <button
+            key={key}
+            onClick={() => selectExam(key)}
+            className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
+          >
+            <span className="font-medium">{cfg.label}</span>
+            <span className={`ml-2 text-xs ${t.textMuted}`}>
+              {cfg.fullName} · {Math.round(cfg.durationSeconds / 60)} min
+            </span>
+          </button>
+        ))}
+        {onExit && (
+          <button onClick={onExit} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
+            ← वापस जाएं
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // ── SCREEN 2: Layout picker ──
+  if (needsLayoutChoice && !activeLayout) {
+    return (
+      <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
+          {config.label} — apna keyboard layout chuno
+        </p>
+        {config.layouts.map((l) => (
+          <button
+            key={l}
+            onClick={() => selectLayout(l)}
+            className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
+          >
+            <span className="font-medium">{LAYOUT_LABELS[l]}</span>
+          </button>
+        ))}
+        <button onClick={exitExam} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
+          ← दूसरा Exam चुनें
+        </button>
+      </div>
+    );
+  }
+
+  // ── SCREEN 3: Chapter picker ──
+  if (chapterIndex === null) {
+    return (
+      <div className="flex flex-col gap-3 max-w-2xl mx-auto w-full py-8">
+        <p className={`text-sm text-center ${t.textMuted} mb-2`}>
+          {config.label} ({LAYOUT_LABELS[activeLayout]}) — ek chapter चुनो
+        </p>
+        {chapters.map((chapter, idx) => {
+          const wordCount = chapter.text.split(/\s+/).filter(Boolean).length;
+          return (
+            <button
+              key={chapter.id}
+              onClick={() => startChapter(idx)}
+              className={`text-left px-4 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textNormal}`}
+              style={{ fontFamily }}
+            >
+              <span className="font-medium">
+                {idx + 1}. {chapter.title}
+              </span>
+              <span className={`ml-2 text-xs ${t.textMuted}`} style={{ fontFamily: "inherit" }}>
+                {wordCount} शब्द
+              </span>
+            </button>
+          );
+        })}
+        <button onClick={needsLayoutChoice ? backToLayoutChoice : exitExam} className={`mx-auto mt-2 text-sm ${t.textMuted} underline`}>
+          ← वापस जाएं
+        </button>
+      </div>
+    );
+  }
+
+  const elapsedMs = state.startTime ? now - state.startTime : 0;
+  const remainingSeconds = state.startTime
+    ? Math.max(0, Math.ceil((state.durationMs - elapsedMs) / 1000))
+    : Math.round(state.durationMs / 1000);
+  const formattedTime = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, "0")}`;
+  const timeColor =
+    remainingSeconds <= 10 ? t.timeDanger : remainingSeconds <= 30 ? t.timeWarn : t.timeSafe;
+
+  // ── SCREEN 4: Result ──
+  if (state.finished) {
+    const stats = computeStats(state, elapsedMs);
+    const netScore = config.scoreMethod === "rsmssb" ? stats.netWpmRSMSSB : stats.netWpmSSC;
+
+    return (
+      <div className="flex flex-col items-center gap-6 max-w-2xl mx-auto w-full py-8">
+        <p className={`text-sm uppercase tracking-widest ${t.textMuted}`}>
+          {config.fullName} · {LAYOUT_LABELS[activeLayout]}
+        </p>
+        <div className="text-center">
+          <p className={`text-[clamp(3rem,10vw,6rem)] font-bold tabular-nums ${t.textNormal}`}>{netScore}</p>
+          <p className={`text-xs uppercase tracking-widest mt-2 ${t.textMuted}`}>Net WPM</p>
+        </div>
+        <div className="flex gap-6 flex-wrap justify-center">
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.textNormal}`}>{stats.grossWpm}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Gross WPM</p>
+          </div>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.textNormal}`}>{stats.accuracy}%</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Accuracy</p>
+          </div>
+          <div className={`text-center p-6 ${t.glassCard}`}>
+            <p className={`text-3xl font-bold ${t.incorrect}`}>{stats.incorrectWords}</p>
+            <p className={`text-xs uppercase ${t.textMuted} mt-1`}>Wrong Words</p>
+          </div>
+        </div>
+        <p className={`text-xs ${t.textMuted} text-center max-w-md`}>
+          Exact threshold apni exam ki official notification mein check karo — ye score sirf practice ke liye hai.
+        </p>
+        <div className="flex gap-4 flex-wrap justify-center">
+          <button
+            onClick={restartChapter}
+            className={`px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 ${t.primaryButton}`}
+          >
+            फिर से कोशिश करें
+          </button>
+          <button
+            onClick={backToChapterList}
+            className={`px-8 py-3 rounded-xl text-sm transition-all ${t.glassButton} ${t.textMuted}`}
+          >
+            दूसरा Chapter चुनें
+          </button>
+          {onExit && (
+            <button onClick={onExit} className={`px-8 py-3 rounded-xl text-sm ${t.textMuted} underline`}>
+              सामान्य Typing Test पर जाएं
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const typedSoFar =
+    state.words.slice(0, state.wordIndex).join(" ") +
+    (state.wordIndex > 0 ? " " : "") +
+    state.typed;
+
+  // ── SCREEN 5: Blind typing screen ──
+  return (
+    <div
+      className="flex flex-col gap-6 max-w-4xl mx-auto w-full py-8"
+      onContextMenu={(e) => e.preventDefault()}
+      onClick={refocusHiddenInput}
+    >
+      <input
+        ref={hiddenInputRef}
+        tabIndex={-1}
+        className="fixed opacity-0 pointer-events-none"
+        style={{ top: 0, left: 0, width: 1, height: 1 }}
+      />
+
+      <p className={`text-center text-xs ${t.textMuted} uppercase tracking-wider`}>
+        {config.fullName} · {LAYOUT_LABELS[activeLayout]} — Backspace:{" "}
+        {config.backspaceMode === "full" && "पूरी तरह Allowed"}
+        {config.backspaceMode === "none" && "बंद"}
+        {config.backspaceMode === "currentWordOnly" && "सिर्फ मौजूदा शब्द तक"}
+        {config.backspaceMode === "currentPlusOneWord" && "मौजूदा + 1 पिछला शब्द"}
+      </p>
+      <button onClick={backToChapterList} className={`mx-auto text-xs ${t.textMuted} underline`}>
+        Chapter बदलें
+      </button>
+
+      <div className="text-center">
+        <p className={`text-3xl font-bold font-mono tabular-nums ${timeColor}`}>{formattedTime}</p>
+      </div>
+
+      <div className={`p-6 shadow-xl ${t.glassCard}`}>
+        <p className={`text-xs ${t.textMuted} mb-2 uppercase tracking-wider`}>Passage</p>
+        <div
+          ref={passageRef}
+          className="text-xl leading-relaxed select-none overflow-y-auto hide-scrollbar flex flex-wrap gap-x-2"
+          style={{ fontFamily, maxHeight: "7.5rem" }}
+        >
+          <span className={t.untyped}>
+            {state.words.map((word, idx) => (
+              <span key={idx} ref={idx === state.wordIndex ? activeWordRef : null}>
+                {word}{" "}
+              </span>
+            ))}
+          </span>
+        </div>
+      </div>
+
+      <div className={`p-6 shadow-xl ${t.glassCard}`}>
+        <p className={`text-xs ${t.textMuted} mb-2 uppercase tracking-wider`}>आपकी टाइपिंग</p>
+        <div
+          ref={typedBoxRef}
+          className={`text-xl leading-relaxed overflow-y-auto hide-scrollbar ${t.textNormal}`}
+          style={{ fontFamily, maxHeight: "7.5rem" }}
+        >
+          {typedSoFar}
+          <span
+            className="inline-block w-0.5 h-5 animate-pulse ml-0.5 align-middle"
+            style={{ backgroundColor: t.cursor }}
+          />
+        </div>
+      </div>
+
+      <button onClick={restartChapter} className={`mx-auto text-sm ${t.textMuted} underline`}>
+        Reset
+      </button>
+    </div>
+  );
+}
+
+===== FILE: E:\TypeExpress\client\src\components\VirtualKeyboard.jsx =====
+
+import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
+import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+
+// Key sizes are computed purely by CSS clamp() — never JavaScript
+// measurement. This is deliberate: clamp() is resolved instantly and
+// reliably by the browser on every device, with no timing/mounting race
+// conditions the way JS-measured ResizeObserver-based scaling can have
+// on some real phones. The keyboard will always fit, shrinking smoothly
+// as the screen gets narrower, down to a defined minimum size.
+const ROW_1 = [
+  { code: "Backquote", u: 1 }, { code: "Digit1", u: 1 }, { code: "Digit2", u: 1 },
+  { code: "Digit3", u: 1 }, { code: "Digit4", u: 1 }, { code: "Digit5", u: 1 },
+  { code: "Digit6", u: 1 }, { code: "Digit7", u: 1 }, { code: "Digit8", u: 1 },
+  { code: "Digit9", u: 1 }, { code: "Digit0", u: 1 }, { code: "Minus", u: 1 },
+  { code: "Equal", u: 1 }, { code: "Backspace", u: 2 },
+];
+
+const ROW_2 = [
+  { code: "Tab", u: 1.5 }, { code: "KeyQ", u: 1 }, { code: "KeyW", u: 1 },
+  { code: "KeyE", u: 1 }, { code: "KeyR", u: 1 }, { code: "KeyT", u: 1 },
+  { code: "KeyY", u: 1 }, { code: "KeyU", u: 1 }, { code: "KeyI", u: 1 },
+  { code: "KeyO", u: 1 }, { code: "KeyP", u: 1 }, { code: "BracketLeft", u: 1 },
+  { code: "BracketRight", u: 1 }, { code: "Backslash", u: 1.5 },
+];
+
+const ROW_3 = [
+  { code: "CapsLock", u: 1.75 }, { code: "KeyA", u: 1 }, { code: "KeyS", u: 1 },
+  { code: "KeyD", u: 1 }, { code: "KeyF", u: 1 }, { code: "KeyG", u: 1 },
+  { code: "KeyH", u: 1 }, { code: "KeyJ", u: 1 }, { code: "KeyK", u: 1 },
+  { code: "KeyL", u: 1 }, { code: "Semicolon", u: 1 }, { code: "Quote", u: 1 },
+  { code: "Enter", u: 2.25 },
+];
+
+const ROW_4 = [
+  { code: "ShiftLeft", u: 2.25 }, { code: "KeyZ", u: 1 }, { code: "KeyX", u: 1 },
+  { code: "KeyC", u: 1 }, { code: "KeyV", u: 1 }, { code: "KeyB", u: 1 },
+  { code: "KeyN", u: 1 }, { code: "KeyM", u: 1 }, { code: "Comma", u: 1 },
+  { code: "Period", u: 1 }, { code: "Slash", u: 1 }, { code: "ShiftRight", u: 2.75 },
+];
+
+const ROW_5 = [
+  { code: "ControlLeft", u: 1.25 }, { code: "AltLeft", u: 1.25 },
+  { code: "Space", u: 6.25 },
+  { code: "AltRight", u: 1.25 }, { code: "ControlRight", u: 1.25 },
+];
+
+const ROWS = [ROW_1, ROW_2, ROW_3, ROW_4, ROW_5];
+
+const FUNCTION_KEYS = new Set([
+  "Backspace", "Tab", "CapsLock", "Enter", "ShiftLeft", "ShiftRight",
+  "ControlLeft", "ControlRight", "AltLeft", "AltRight", "Space",
+]);
+
+const FUNCTION_LABELS = {
+  Backspace: "⌫",
+  Tab: "Tab",
+  CapsLock: "Caps",
+  Enter: "Enter",
+  ShiftLeft: "Shift",
+  ShiftRight: "Shift",
+  ControlLeft: "Ctrl",
+  ControlRight: "Ctrl",
+  AltLeft: "Alt",
+  AltRight: "Alt",
+};
+
+// Returns a CSS calc() string — resolved natively by the browser, using
+// the --kb-unit / --kb-gap custom properties set on the outer container.
+function widthCss(u) {
+  return `calc(var(--kb-unit) * ${u} + var(--kb-gap) * ${u - 1})`;
+}
+
+// mode: "mangal" | "krutidev" | "gail"
+// GAIL raw keystrokes are identical to Krutidev's — the same physical
+// key positions print the same Devanagari-looking glyphs on a real
+// GAIL keyboard (that's the entire point of GAIL: familiar to Krutidev
+// typists). So for rendering purposes GAIL behaves exactly like
+// Krutidev — only Mangal is structurally different.
+export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, themeStyles: t }) {
+  const isRawGlyphMode = mode === "krutidev" || mode === "gail";
+  const glyphFontFamily = isRawGlyphMode
+    ? "'Kruti Dev 010', sans-serif"
+    : "'Noto Sans Devanagari', 'Mangal', sans-serif";
+
+  function glyphFor(label) {
+    if (isRawGlyphMode) return label;
+    return MANGAL_KEYMAP[label] ?? "";
+  }
+
+  // Alt+numpad special characters only apply to Krutidev's own extra
+  // glyphs — GAIL's special characters come through kru2uni's multi-key
+  // ASCII patterns instead, no Alt+numpad involved, so no banner for it.
+  const showAltCodeBanner = mode === "krutidev" && nextKey?.altCode !== undefined;
+
+  return (
+    <div
+      className={`rounded-2xl p-3 sm:p-5 border ${t.keyboardPanel} overflow-hidden`}
+      style={{
+        // These three custom properties are the ONLY place key sizing is
+        // controlled. Never below a comfortable minimum, never above the
+        // original desktop size — everything between scales with the
+        // actual screen width, purely via CSS, on every device.
+        "--kb-unit": "clamp(15px, 4.4vw, 42px)",
+        "--kb-gap": "clamp(2px, 0.7vw, 6px)",
+        "--kb-height": "clamp(30px, 8.5vw, 46px)",
+        "--kb-font-base": "clamp(9px, 2.6vw, 15px)",
+        "--kb-font-small": "clamp(6px, 1.6vw, 9px)",
+      }}
+    >
+      <div className="flex flex-col gap-1.5 items-center w-max mx-auto">
+        {ROWS.map((row, rIdx) => (
+          <div key={rIdx} className="flex gap-1.5">
+            {row.map((k) => {
+              const { code, u } = k;
+              const width = widthCss(u);
+
+              if (FUNCTION_KEYS.has(code)) {
+                const isShiftHighlight =
+                  nextKey?.shift && !nextKey?.altGr && (code === "ShiftLeft" || code === "ShiftRight");
+                const isAltGrHighlight = mode === "mangal" && nextKey?.altGr && code === "AltRight";
+                const isAltCodeHighlight =
+                  showAltCodeBanner && (code === "AltLeft" || code === "AltRight");
+                const isSpaceHighlight = code === "Space" && nextKey?.label === " ";
+                const active = isShiftHighlight || isAltGrHighlight || isAltCodeHighlight || isSpaceHighlight;
+
+                return (
+                  <div
+                    key={code}
+                    style={{ width, height: "var(--kb-height)", fontSize: "var(--kb-font-small)" }}
+                    className={[
+                      "flex items-center justify-center rounded-lg font-medium select-none",
+                      "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
+                      active
+                        ? "bg-gradient-to-b from-blue-400 to-blue-600 border-blue-700 text-white shadow-[0_0_14px_rgba(59,130,246,0.8)]"
+                        : t.keyboardFnKey,
+                    ].join(" ")}
+                  >
+                    {code === "Space" ? (isSpaceHighlight ? "अगला शब्द" : "") : FUNCTION_LABELS[code]}
+                  </div>
+                );
+              }
+
+              const base = CODE_TO_BASE_KEY[code];
+              const shiftLabel = getShiftedLabel(base);
+              const baseGlyph = glyphFor(base);
+              const shiftGlyph = glyphFor(shiftLabel);
+              const nuktaGlyph = mode === "mangal" ? NUKTA_KEYMAP[base] : null;
+
+              const isActiveBase =
+                nextKey && !nextKey.shift && !nextKey.altGr && nextKey.altCode === undefined && nextKey.label === base;
+              const isActiveShift =
+                nextKey && nextKey.shift && !nextKey.altGr && nextKey.label === shiftLabel;
+              const isActiveAltGr = mode === "mangal" && nextKey && nextKey.altGr && nextKey.label === base;
+              const active = isActiveBase || isActiveShift || isActiveAltGr;
+
+              return (
+                <div
+                  key={code}
+                  style={{ width, height: "var(--kb-height)" }}
+                  className={[
+                    "flex flex-col items-center justify-center rounded-lg leading-tight select-none",
+                    "border-b-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-100",
+                    active
+                      ? "bg-gradient-to-b from-blue-400 to-blue-600 border-blue-700 text-white shadow-[0_0_14px_rgba(59,130,246,0.85)] scale-[1.05]"
+                      : t.keyboardKey,
+                  ].join(" ")}
+                >
+                  <span
+                    style={{
+                      fontSize: isActiveShift ? "var(--kb-font-base)" : "var(--kb-font-small)",
+                      fontWeight: isActiveShift ? "bold" : "normal",
+                      opacity: isActiveAltGr ? 0.1 : isActiveShift ? 1 : 0.55,
+                      fontFamily: glyphFontFamily,
+                    }}
+                  >
+                    {shiftGlyph}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: isActiveShift ? "var(--kb-font-small)" : "var(--kb-font-base)",
+                      fontWeight: isActiveBase ? "bold" : "normal",
+                      opacity: isActiveShift ? 0.4 : 1,
+                      fontFamily: glyphFontFamily,
+                    }}
+                  >
+                    {baseGlyph}
+                  </span>
+                  {nuktaGlyph && (
+                    <span
+                      style={{
+                        fontSize: isActiveAltGr ? "var(--kb-font-base)" : "var(--kb-font-small)",
+                        fontWeight: isActiveAltGr ? "bold" : "normal",
+                        opacity: isActiveAltGr ? 1 : 0.4,
+                        color: "#facc15",
+                      }}
+                    >
+                      {isActiveAltGr ? "🔸 " : ""}
+                      {nuktaGlyph}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

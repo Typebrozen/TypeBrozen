@@ -1,5 +1,6 @@
 import { CODE_TO_BASE_KEY, getShiftedLabel } from "../engine/physicalKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { GAIL_KEYMAP } from "../layouts/gail-engine";
 
 // Key sizes are computed purely by CSS clamp() — never JavaScript
 // measurement. This is deliberate: clamp() is resolved instantly and
@@ -77,12 +78,19 @@ function widthCss(u) {
 // typists). So for rendering purposes GAIL behaves exactly like
 // Krutidev — only Mangal is structurally different.
 export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, themeStyles: t }) {
+  // "gailu" = practice-mode GAIL (seedha Unicode). Purana "gail" (ExamMode) pehle jaisa hi raha.
+  const isGailUnicode = mode === "gailu";
   const isRawGlyphMode = mode === "krutidev" || mode === "gail";
   const glyphFontFamily = isRawGlyphMode
     ? "'Kruti Dev 010', sans-serif"
     : "'Noto Sans Devanagari', 'Mangal', sans-serif";
 
   function glyphFor(label) {
+    if (isGailUnicode) {
+      const g = GAIL_KEYMAP[label] ?? "";
+      // akeli matra / halant / nukta ke aage ◌ taaki saaf dikhe
+      return /^[\u0900-\u0903\u093A-\u094F]/.test(g) ? "\u25CC" + g : g;
+    }
     if (isRawGlyphMode) return label;
     return MANGAL_KEYMAP[label] ?? "";
   }
@@ -121,7 +129,8 @@ export default function VirtualKeyboard({ nextKey, mode = "mangal", theme, theme
                 const isAltCodeHighlight =
                   showAltCodeBanner && (code === "AltLeft" || code === "AltRight");
                 const isSpaceHighlight = code === "Space" && nextKey?.label === " ";
-                const active = isShiftHighlight || isAltGrHighlight || isAltCodeHighlight || isSpaceHighlight;
+                const isBackspaceHighlight = code === "Backspace" && nextKey?.label === "Backspace";
+                const active = isShiftHighlight || isAltGrHighlight || isAltCodeHighlight || isSpaceHighlight || isBackspaceHighlight;
 
                 return (
                   <div

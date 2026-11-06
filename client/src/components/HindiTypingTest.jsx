@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { createInitialState, appendChar, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
+import { createInitialState, appendChar, setTyped, backspace, commitWord, checkTimeout, computeStats } from "../engine/engine";
 import { toGraphemeSpans } from "../engine/graphemes";
 import { toKrutiSpans } from "../engine/krutiSpans";
-import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
+import { resolvePhysicalKey, resolveAltGrKey, isShiftedLabel } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { prepareCustomParagraph } from "../engine/customText";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { GAIL_KEYMAP, gailApply, gailPlan } from "../layouts/gail-engine";
 import { HINDI_PARAGRAPHS, KRUTIDEV_PARAGRAPHS } from "../lessons/HindiParagraphs";
 import VirtualKeyboard from "./VirtualKeyboard";
 import ExamMode from "./ExamMode";
@@ -87,6 +88,38 @@ function randomParagraph(source) {
   return combined;
 }
 
+// ── GAIL helpers ──
+// GAIL ab asli Remington GAIL jaisa kaam karta hai: har key seedha Unicode
+// banati hai (koi Kruti Dev font ya converter nahi). Dono taraf (target aur
+// typed) NFC me rakhe jate hain taaki ड़/ढ़ jaise nukta akshar ek jaise compare hon.
+function normGail(s) {
+  return s.normalize("NFC");
+}
+
+// Custom text ko GAIL ke liye taiyaar karta hai: Unicode me badalta hai aur
+// wo words hata deta hai jo GAIL main-layer se type nahi ho sakte.
+function prepareParagraphFor(activeMode, text) {
+  if (activeMode === "gail") {
+    const { paragraph, skippedCount } = prepareCustomParagraph(text, "mangal");
+    const words = normGail(paragraph).split(/\s+/).filter(Boolean);
+    const typeable = words.filter((w) => gailPlan(w) !== null);
+    return {
+      paragraph: typeable.join(" "),
+      skippedCount: skippedCount + (words.length - typeable.length),
+    };
+  }
+  return prepareCustomParagraph(text, activeMode);
+}
+
+// Keyboard par agli key kaun si dabani hai (GAIL).
+function getGailNextKey(word, typed) {
+  if (typed === word) return { label: " ", shift: false };
+  const plan = gailPlan(word, typed);
+  if (!plan) return { label: "Backspace", shift: false }; // galat ho gaya — pehle mitao
+  const first = plan[0];
+  return { label: first, shift: isShiftedLabel(first) };
+}
+
 function encouragement(cpm) {
   if (cpm >= 150) return "🏆 शानदार! सरकारी परीक्षा के लिए तैयार!";
   if (cpm >= 100) return "🔥 बहुत अच्छा! अभ्यास जारी रखें!";
@@ -149,13 +182,13 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const showTypingArea = testMode !== "custom" || customReady;
   useEffect(() => {
-    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
+    if (mode === "krutidev" && showTypingArea) {
       hiddenInputRef.current?.focus();
     }
   }, [mode, showTypingArea]);
 
   function refocusHiddenInput() {
-    if ((mode === "krutidev" || mode === "gail") && showTypingArea) {
+    if (mode === "krutidev" && showTypingArea) {
       hiddenInputRef.current?.focus();
     }
   }
@@ -165,12 +198,12 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       comboRef.current = 0;
       setComboDisplay(0);
       if (testMode === "custom" && customReady) {
-        const { paragraph } = prepareCustomParagraph(customText, activeMode === "gail" ? "krutidev" : activeMode);
+        const { paragraph } = prepareParagraphFor(activeMode, customText);
         setState(createInitialState(paragraph, durationSeconds * 1000));
       } else {
-        const source =
-          activeMode === "krutidev" || activeMode === "gail" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
-        setState(createInitialState(randomParagraph(source), durationSeconds * 1000));
+        const source = activeMode === "krutidev" ? KRUTIDEV_PARAGRAPHS : HINDI_PARAGRAPHS;
+        const text = randomParagraph(source);
+        setState(createInitialState(activeMode === "gail" ? normGail(text) : text, durationSeconds * 1000));
       }
       setNow(Date.now());
     },
@@ -197,7 +230,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   };
 
   const handleStartCustom = () => {
-    const { paragraph, skippedCount } = prepareCustomParagraph(customText, mode === "gail" ? "krutidev" : mode);
+    const { paragraph, skippedCount } = prepareParagraphFor(mode, customText);
 
     if (!paragraph) return;
 
@@ -230,7 +263,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
         words: state.words.slice(0, state.wordIndex),
         typedHistory: state.typedHistory.slice(0, state.wordIndex),
         wordResults: state.wordResults.slice(0, state.wordIndex),
-        mode,
+        mode: mode === "gail" ? "mangal" : mode,
         filename: `TypeHanuman-Report-${Date.now()}.pdf`,
       });
     } catch (err) {
@@ -294,9 +327,23 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
       const resolvedKey = resolvePhysicalKey(e);
       if (!resolvedKey) return;
 
+      // ── Remington GAIL: key -> seedha Unicode (gail-engine) ──
+      if (mode === "gail") {
+        if (!(resolvedKey in GAIL_KEYMAP)) return;
+        const nextTyped = normGail(gailApply(typedTrackRef.current, resolvedKey));
+        if (nextTyped === typedTrackRef.current) return;
+        if (gailPlan(currentWordRef.current, nextTyped) !== null) {
+          playKeySound();
+        } else {
+          playWrongSound();
+        }
+        setState((prev) => setTyped(prev, normGail(gailApply(prev.typed, resolvedKey))));
+        return;
+      }
+
       let charToAppend = null;
 
-      if (mode === "krutidev" || mode === "gail") {
+      if (mode === "krutidev") {
         charToAppend = resolvedKey;
       } else if (e.altKey) {
         const base = resolveAltGrKey(e);
@@ -312,7 +359,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
     }
 
     function handleHiddenInput(e) {
-      if (mode !== "krutidev" && mode !== "gail") return;
+      if (mode !== "krutidev") return;
       const typedChar = e.target.value;
       e.target.value = "";
       if (!typedChar) return;
@@ -344,7 +391,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
 
   const elapsedMs = state.startTime ? now - state.startTime : 0;
   const fontFamily =
-    mode === "krutidev" || mode === "gail"
+    mode === "krutidev"
       ? "'Kruti Dev 010', sans-serif"
       : "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
 
@@ -436,9 +483,11 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   // ── TYPING SCREEN ──
   const activeWord = state.words[state.wordIndex] ?? "";
   const nextKeyInfo =
-    state.typed.length >= activeWord.length
+    mode === "gail"
+      ? getGailNextKey(activeWord, state.typed)
+      : state.typed.length >= activeWord.length
       ? { label: " ", shift: false }
-      : mode === "krutidev" || mode === "gail"
+      : mode === "krutidev"
       ? getNextKrutiKeyInfo(activeWord[state.typed.length])
       : getNextKeyInfo(activeWord.slice(state.typed.length));
 
@@ -493,9 +542,14 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
           </button>
         </div>
 
-        {(mode === "krutidev" || mode === "gail") && (
+        {mode === "krutidev" && (
           <p className={`text-center text-xs ${t.textMuted}`}>
             विशेष अक्षरों (जैसे Alt+0184) के लिए फिजिकल नंबर-पैड जरूरी है — लैपटॉप पर बिना नंबर-पैड के ये काम नहीं करेंगे
+          </p>
+        )}
+        {mode === "gail" && (
+          <p className={`text-center text-xs ${t.textMuted}`}>
+            GAIL में छोटी इ की मात्रा (ि) व्यंजन के <strong>बाद</strong> टाइप होती है, और रेफ (Shift+Z) अगले व्यंजन से <strong>पहले</strong>
           </p>
         )}
 
@@ -610,8 +664,13 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
                   }
 
                   if (wIdx === state.wordIndex) {
-                    const spans = mode === "krutidev" || mode === "gail" ? toKrutiSpans(word) : toGraphemeSpans(word);
-                    const typed = state.typed;
+                    const spans = mode === "krutidev" ? toKrutiSpans(word) : toGraphemeSpans(word);
+                    let typed = state.typed;
+                    // GAIL: aadha bana akshar (jaise ख् ya अ jo k dabane par ख/आ banega)
+                    // abhi galat na dikhe — sirf tab jab sach me sahi raaste par ho.
+                    if (mode === "gail" && typed.length > 0 && !word.startsWith(typed) && gailPlan(word, typed) !== null) {
+                      typed = typed.slice(0, -1);
+                    }
 
                     return (
                       <span key={wIdx} ref={activeWordRef} className="inline-flex">
@@ -652,7 +711,7 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
               </div>
             </div>
 
-            <VirtualKeyboard nextKey={nextKeyInfo} mode={mode} theme={theme} themeStyles={t} />
+            <VirtualKeyboard nextKey={nextKeyInfo} mode={mode === "gail" ? "gailu" : mode} theme={theme} themeStyles={t} />
 
             {customNotice && (
               <p className={`text-center text-xs ${t.textMuted}`}>{customNotice}</p>

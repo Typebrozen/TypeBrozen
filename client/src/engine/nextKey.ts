@@ -21,9 +21,13 @@ for (const [label, char] of Object.entries(MANGAL_KEYMAP)) {
   }
 }
 
+// FIX: sirf Latin digits (1-9, 0) ke liye AltGr hint rakha hai.
+// Nukta wale akshar (ढ़, ड़, फ़, ज़) aur ृ real InScript me AltGr se nahi,
+// normal keys se bante hain (jaise ढ़ = Shift+[ phir ]  aur  ृ = = key),
+// isliye unke hint ab seedhe asli InScript keys dikhayenge.
 const CHAR_TO_ALTGR_LABEL: Record<string, string> = {};
 for (const [label, char] of Object.entries(NUKTA_KEYMAP)) {
-  CHAR_TO_ALTGR_LABEL[char] = label;
+  if (/^[0-9]$/.test(label)) CHAR_TO_ALTGR_LABEL[char] = label;
 }
 
 // remainingText = word ka wo hissa jo abhi tak type nahi hua
