@@ -215,14 +215,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Feedback Button */}
-          <button
-            onClick={() => setFeedbackOpen(true)}
-            className={`btn-hover px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${t.btn}`}
-          >
-            💬 Feedback
-          </button>
-
           {/* Exam Hall Button */}
           <button
             onClick={() => setPage(page === 'exam' ? 'typing' : 'exam')}
@@ -265,6 +257,10 @@ export default function App() {
                   page={page}
                   onRaceToggle={() => {
                     setPage(page === 'multiplayer' ? 'typing' : 'multiplayer');
+                    setSettingsOpen(false);
+                  }}
+                  onFeedback={() => {
+                    setFeedbackOpen(true);
                     setSettingsOpen(false);
                   }}
                 />

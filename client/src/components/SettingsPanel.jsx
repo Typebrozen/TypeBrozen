@@ -126,6 +126,7 @@ export default function SettingsPanel({
   onThemeChange,
   page,
   onRaceToggle,
+  onFeedback,
 }) {
   const [s, setS] = useState(getSoundSettings);
   const [openId, setOpenId] = useState(null); // which category is open (none at start)
@@ -268,6 +269,27 @@ export default function SettingsPanel({
           }`}
         >
           {page === 'multiplayer' ? '⌨️ Back to Typing' : '🏁 Race Mode'}
+        </button>
+      </AccordionSection>
+
+      {/* 💬 FEEDBACK */}
+      <AccordionSection
+        id="feedback"
+        icon="💬"
+        title="Feedback"
+        summary="Report a bug or share an idea"
+        openId={openId}
+        setOpenId={setOpenId}
+      >
+        <p className="text-[11px] opacity-70 leading-snug">
+          Found a problem or have an idea? Tell us — it helps make TypeHanuman better.
+        </p>
+        <button
+          type="button"
+          onClick={onFeedback}
+          className={`btn-hover px-3 py-2 rounded-lg text-xs text-left transition-colors ${t.btn}`}
+        >
+          💬 Send Feedback
         </button>
       </AccordionSection>
     </div>
