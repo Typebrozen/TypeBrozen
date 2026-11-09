@@ -111,6 +111,13 @@ function prepareParagraphFor(activeMode, text) {
   return prepareCustomParagraph(text, activeMode);
 }
 
+// InScript / Krutidev: kya ab tak type hua text word ke shuru se match karta hai?
+// (NFD me compare taaki ड़ जaise nukta akshar ek form ho ya do, fark na pade)
+function isOffTrack(word, typed) {
+  if (typed.length === 0) return false;
+  return !word.normalize("NFD").startsWith(typed.normalize("NFD"));
+}
+
 // Keyboard par agli key kaun si dabani hai (GAIL).
 function getGailNextKey(word, typed) {
   if (typed === word) return { label: " ", shift: false };
@@ -485,8 +492,10 @@ export default function HindiTypingTest({ theme, themeStyles: t }) {
   const nextKeyInfo =
     mode === "gail"
       ? getGailNextKey(activeWord, state.typed)
-      : state.typed.length >= activeWord.length
+      : state.typed === activeWord
       ? { label: " ", shift: false }
+      : isOffTrack(activeWord, state.typed)
+      ? { label: "Backspace", shift: false } // galat key dab gayi — pehle mitao
       : mode === "krutidev"
       ? getNextKrutiKeyInfo(activeWord[state.typed.length])
       : getNextKeyInfo(activeWord.slice(state.typed.length));

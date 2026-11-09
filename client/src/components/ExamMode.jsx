@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   createInitialState,
   appendChar,
+  setTyped,
   backspace,
   reopenPreviousWord,
   commitWord,
@@ -14,6 +15,7 @@ import { resolvePhysicalKey, resolveAltGrKey } from "../engine/physicalKey";
 import { getNextKeyInfo } from "../engine/nextKey";
 import { getNextKrutiKeyInfo } from "../engine/krutiNextKey";
 import { MANGAL_KEYMAP, NUKTA_KEYMAP } from "../layouts/mangal-keymap";
+import { GAIL_KEYMAP, gailApply, gailPlan } from "../layouts/gail-engine";
 import { EXAM_CONFIGS } from "../lessons/examConfig";
 import { resolveChapters } from "../lessons/contentResolver";
 
@@ -29,12 +31,30 @@ const LAYOUT_LABELS = {
   krutidev: "Krutidev 010",
 };
 
-// "krutidev" aur "gail" dono raw Kruti-Dev-style physical keys use
-// karte hain (target text already uni2kru se convert ho chuka hota
-// hai contentResolver mein) — isliye typing-logic ke liye ye dono
-// EK jaisa treat hote hain. Sirf "inscript" alag hai.
+// Sirf "krutidev" raw Kruti-Dev keys use karta hai (target text uni2kru se
+// convert hota hai contentResolver mein). "inscript" aur "gail" dono seedha
+// Unicode type karte hain — GAIL ka apna engine hai (layouts/gail-engine).
 function isRawGlyphLayout(layout) {
-  return layout === "krutidev" || layout === "gail";
+  return layout === "krutidev";
+}
+
+// ── GAIL helpers ──
+function normGail(s) {
+  return s.normalize("NFC");
+}
+
+// GAIL ke liye chapter text: NFC me, aur sirf wahi words jo GAIL se type ho sakte hain
+// (taaki exam me koi aisa word na aaye jo type hi na ho paye).
+const gailTypeableCache = new Map();
+function gailTypeable(word) {
+  if (!gailTypeableCache.has(word)) gailTypeableCache.set(word, gailPlan(word) !== null);
+  return gailTypeableCache.get(word);
+}
+function prepareChapterText(text, layout) {
+  if (layout !== "gail") return text;
+  const words = normGail(text).split(/\s+/).filter(Boolean);
+  const typeable = words.filter(gailTypeable);
+  return (typeable.length > 0 ? typeable : words).join(" ");
 }
 
 function maxWordsBackFor(backspaceMode) {
@@ -122,7 +142,7 @@ export default function ExamMode({ onExit, theme, themeStyles: t }) {
     const cfg = EXAM_CONFIGS[examKey];
     const chapter = chapters[idx];
     setChapterIndex(idx);
-    setState(createInitialState(buildLoopedParagraph(chapter.text, cfg.durationSeconds), cfg.durationSeconds * 1000));
+    setState(createInitialState(buildLoopedParagraph(prepareChapterText(chapter.text, activeLayout), cfg.durationSeconds), cfg.durationSeconds * 1000));
     setNow(Date.now());
   };
 
@@ -130,9 +150,9 @@ export default function ExamMode({ onExit, theme, themeStyles: t }) {
     if (!examKey || chapterIndex === null) return;
     const cfg = EXAM_CONFIGS[examKey];
     const chapter = chapters[chapterIndex];
-    setState(createInitialState(buildLoopedParagraph(chapter.text, cfg.durationSeconds), cfg.durationSeconds * 1000));
+    setState(createInitialState(buildLoopedParagraph(prepareChapterText(chapter.text, activeLayout), cfg.durationSeconds), cfg.durationSeconds * 1000));
     setNow(Date.now());
-  }, [examKey, chapterIndex, chapters]);
+  }, [examKey, chapterIndex, chapters, activeLayout]);
 
   const backToChapterList = () => {
     setChapterIndex(null);
@@ -184,6 +204,14 @@ export default function ExamMode({ onExit, theme, themeStyles: t }) {
           return;
         }
         setState((prev) => reopenPreviousWord(prev, maxWordsBackFor(config.backspaceMode)));
+        return;
+      }
+
+      // ── Remington GAIL: key -> seedha Unicode (gail-engine) ──
+      if (activeLayout === "gail") {
+        const gailKey = resolvePhysicalKey(e);
+        if (!gailKey || !(gailKey in GAIL_KEYMAP)) return;
+        setState((prev) => setTyped(prev, normGail(gailApply(prev.typed, gailKey))));
         return;
       }
 

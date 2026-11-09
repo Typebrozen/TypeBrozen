@@ -19,8 +19,15 @@ const k2u: [string, string][] = [
   ['{k', '\u0915\u094d\u0937'], ['{', '\u0915\u094d\u0937\u094d'],
   ['=', '\u0924\u094d\u0930'],
   ['|', '\u0926\u094d\u092f'], ['K', '\u091c\u094d\u091e'], ['}', '\u0926\u094d\u0935'], ['J', '\u0936\u094d\u0930'],
-  ['\u00d8', '\u0915\u094d\u0930'], ['\u00dd', '\u092b\u094d\u0930'],
-  ['\u00e6', '\u0926\u094d\u0930'], ['\u00e7', '\u092a\u094d\u0930'], ['xz', '\u0917\u094d\u0930'],
+  // FIX (Nov 2026): consonant + ्र ab wahi keys se bante hain jo students asal me type karte hain.
+  // Pehle yahan Alt-code wale ligature (ç=प्र, Ø=क्र, æ=द्र, Ý=फ्र) the, jinke liye Alt+numpad
+  // dabana padta tha. Ab: प्र=iz, क्र=dz, द्र=nz, फ्र=Qz, ग्र=xz  (z key = ्र)
+  // ट्र ड्र छ्र ठ्र ढ्र ke liye 'ª' (Alt+0170) hi asli tarika hai.
+  ['dz', '\u0915\u094d\u0930'], ['Qz', '\u092b\u094d\u0930'],
+  ['nz', '\u0926\u094d\u0930'], ['iz', '\u092a\u094d\u0930'], ['xz', '\u0917\u094d\u0930'],
+  ['V\u00aa', '\u091f\u094d\u0930'], ['M\u00aa', '\u0921\u094d\u0930'], ['N\u00aa', '\u091b\u094d\u0930'],
+  ['B\u00aa', '\u0920\u094d\u0930'], ['<\u00aa\u00aa', '\u0922\u094d\u0930'],
+  [')', '\u0926\u094d\u0927'],   // द्ध ka apna key hai: Shift+0
   ['#', '\u0930\u0941'], [':', '\u0930\u0942'],
   ['vks', '\u0913'], ['vkS', '\u0914'], ['vk', '\u0906'], ['v', '\u0905'],
   ['bZ', '\u0908'], ['b', '\u0907'],
